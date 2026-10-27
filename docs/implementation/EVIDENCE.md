@@ -13,6 +13,65 @@
 | Supabase project `qcvlnffgqjddvadzbppd` (ap-southeast-2) | Auth health 200. Settings: `anonymous_users=false`, email on, autoconfirm off. REST `airports` → PGRST205 (no tables). |
 | Supabase DB | Reachable via the `aws-0-ap-southeast-2` session pooler. `migration list`: 0 of 3 applied remotely. `db dump --schema public` contains only Supabase's `rls_auto_enable` event-trigger function: no user tables, no data. |
 
+## Round 2 result — 27 Oct 2026 ~14:00 IST (personalised plan flow, real integrations, public release)
+
+**Main flow:** `/plan` "Plan my trip", 5 steps: trip (date range up to 60 days + stay range + goal + optional book-by), cards, points, spending, then the plan.
+
+**Engine (pure, `src/domain/`):** `cards.ts` (allocation), `forecast.ts`, `verdict.ts`, `flexDates.ts`, `plan.ts` (orchestrator + actions), `replan.ts`, `explainGuard.ts`.
+
+**Defects found and fixed in this round**
+- 900 × (1/3) floored to 299 points instead of 300 (float error).
+- A requested example fare was ignored by the verdict ("too uncertain" while a fare was shown).
+- The example-fare choice was lost on re-plan, producing a fake "fare changed" line.
+- The explain rate limit was hard-coded.
+- PowerShell writes corrupted 14 characters in `PlanResults.tsx`, which had shipped earlier; repaired and guarded by the new `check:encoding`.
+- `supabase-js` false positive in the bundle check.
+
+Each defect has a regression test or check.
+
+**Live verification (real network, values never printed)**
+
+| Check | Result |
+|---|---|
+| `pnpm test:live` providers | Duffel 7 sampled dates → `ok`, cheapest €112.92 `LIVE_TEST_DUFFEL`; reprice unchanged; **real Duffel TEST order created**; Gemini `gemini-3.5-flash-lite` explanation accepted by the fact guard in 1.6 s |
+| `pnpm test:live` Supabase | Hosted catalogue read (5 cards) passed; `planner_profiles` → 42501 for anon; anonymous round trip **skipped: anonymous sign-ins are disabled** in the project (owner setting) |
+| `LIVE=1` UI journey, local real-env server | Passed: wizard → Duffel fares → "AI-written (gemini-3.5-flash-lite)" → test booking with "TEST — no real ticket issued; no money charged" |
+| Same UI journey on the public URL | **Passed (20 s)** |
+
+**Hosted Supabase (`qcvlnffgqjddvadzbppd`)**
+- `db push --dry-run` reviewed (5 additive migrations + seed), then applied.
+- `migration list`: 5/5 local = remote.
+- Public REST: airports 200, card_products 200, planner_profiles 401/42501.
+
+**Mocked and local suites**
+
+| Suite | Result |
+|---|---|
+| `pnpm verify` | Prettier, ESLint, `tsc`, **114/114** Vitest (12 files), secret scan (171 files), env-file check, encoding check (165 files) |
+| Local pgTAP | `Files=4, Tests=57, Result: PASS`; `db lint` clean |
+| Playwright 3 viewports (fixture-mode server) | **129 passed, 3 skipped** (the live spec, which runs only with `LIVE=1`). Covers the planner journeys, light and dark axe, and no overflow. |
+| `pnpm build && pnpm check:bundle:local` | Passed; the actual Duffel, Gemini and DB-password values are absent from the client bundle |
+| gitleaks | Frontend and backend histories: no leaks |
+
+**CI (GitHub Actions)**
+- app-ci `043dfe9`: **success**.
+- db-ci `ca06e0c`: **success**.
+
+**Release (public, as the owner approved)**
+- Vercel project `a-una-milla-demo`, production deployment `dpl_BA34Sa9KHVLuVfrQ5DToZi9uL1DU`, **READY from `043dfe9976f66dd08e7d979223a894a8f5acc1c6`**.
+- URL: **https://a-una-milla-demo.vercel.app** (also `a-una-milla-demo-rishi-solankis-projects.vercel.app`).
+- Unauthenticated `curl`: `/` 200, `/plan` 200, `/api/health` 200 → `provider: duffel_test`.
+- `BASE_URL=https://a-una-milla-demo.vercel.app EXPECT_PROVIDER=duffel_test` smoke: **5 passed**.
+- Env vars (production + preview): `PROVIDER_MODE`, `AUTH_MODE`, `FX_LIVE`, `RATE_LIMIT_PER_MIN`, `NEXT_TELEMETRY_DISABLED`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; `DUFFEL_ACCESS_TOKEN` and `GEMINI_API_KEY` as **Sensitive**. `SUPABASE_DB_PASSWORD` is **not** in Vercel.
+- Commits after `043dfe9` change only tests and docs (smoke assertions, evidence); app code is identical.
+
+**Remaining limits**
+- Account persistence needs "Allow anonymous sign-ins" ON in Supabase; until then the app shows "Saved in this browser only".
+- Award seats are never checked.
+- Card posting delays are unknown unless entered.
+- Transfer routes are unverified.
+- No price forecasting.
+
 **Gap map before round 2 (the main flow was missing)**
 - No screen collects the user's cards, spending or planned purchases.
 - The wallet defaults to fictional presets.
