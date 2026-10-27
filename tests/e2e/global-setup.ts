@@ -1,9 +1,9 @@
-import { chromium, type FullConfig } from '@playwright/test';
+import { chromium } from '@playwright/test';
 
 export const SHARE_STATE = 'test-results/.auth/share.json';
 
 /** For protected Vercel previews: open the share link once and reuse its auth cookie in smoke tests. */
-export default async function globalSetup(_config: FullConfig) {
+export default async function globalSetup() {
   const share = process.env.SHARE_URL;
   if (!share) return;
   const browser = await chromium.launch();
