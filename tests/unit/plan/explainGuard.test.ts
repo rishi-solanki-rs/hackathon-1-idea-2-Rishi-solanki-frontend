@@ -42,9 +42,21 @@ describe('AI explanation guard', () => {
       'You hold 40,000 Iberia Club points, so there is no shortfall. Check the seat on the programme site before booking by ' +
         plan.verdict.lsbd +
         '.',
-      'Prices are Duffel test data and the seat is not confirmed.',
+      'Prices are Duffel test data and the seat is not confirmed. Card approval is not guaranteed.',
     ];
     expect(checkExplanation(ok, facts, brands)).toEqual({ ok: true });
+  });
+
+  it('rejects forecasts and positive guarantees', () => {
+    for (const p of [
+      'Approval is guaranteed.',
+      'Prices will drop next month.',
+      'It will be cheaper if you wait.',
+    ])
+      expect(checkExplanation([p], facts, brands)).toMatchObject({
+        ok: false,
+        reason: expect.stringMatching(/unsupported claim/),
+      });
   });
 
   it.each([

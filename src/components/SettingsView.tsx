@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { Download, Trash2 } from 'lucide-react';
+import { signOut } from '@/lib/auth';
 import { clearDemoData, useHydrated } from '@/lib/guestStore';
 import { PLAN_KEY, resetPlanCache, usePlanDraft } from '@/lib/planStore';
 import { useSync } from '@/lib/sync';
+import { t } from '@/i18n/en';
 import { Button, Card, Skeleton } from './ui';
 
 export function SettingsView() {
@@ -32,13 +34,13 @@ export function SettingsView() {
       <Card className="p-5 sm:p-6">
         <h2 className="font-display text-xl">What is stored, and where</h2>
         <ul className="mt-3 grid list-disc gap-1 pl-5 text-sm text-ink-soft">
-          <li>
-            Your trip, cards (names and earn terms only), points balances and planned spending, in
-            this browser.
-          </li>
           <li>{sync.statusText}</li>
-          <li>Recent search results for up to 10 minutes, in this tab’s session storage.</li>
-          <li>We never store card numbers, CVV, PINs, passwords or passport data.</li>
+          <li>
+            Your trip, cards (names and earn rates only), points balances, spending and saved plans.
+          </li>
+          <li>
+            We never store card numbers, CVV, PINs, passwords for other sites or passport data.
+          </li>
         </ul>
         <p className="mt-3 text-sm text-ink-soft">
           Saved now: <strong className="text-ink">{d.profile.cards.length}</strong> card(s),{' '}
@@ -56,16 +58,19 @@ export function SettingsView() {
         <Button
           variant="danger"
           onClick={async () => {
+            const had = sync.enabled;
             await sync.deleteRemote();
+            await signOut();
             clearDemoData();
             resetPlanCache();
             setMsg(
-              'All A Una Milla data was removed from this browser' +
-                (sync.enabled ? ' and from your private account.' : '.'),
+              had
+                ? 'Your data was deleted from this browser and from your account, and you were logged out.'
+                : t.cleared,
             );
           }}
         >
-          <Trash2 aria-hidden className="size-4" /> Clear my data
+          <Trash2 aria-hidden className="size-4" /> {t.clearDemoData}
         </Button>
       </div>
       <p role="status" aria-live="polite" className="text-sm font-medium text-saving">

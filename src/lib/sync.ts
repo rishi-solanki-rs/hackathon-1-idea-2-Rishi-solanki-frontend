@@ -1,134 +1,89 @@
 'use client';
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { useEffect, useSyncExternalStore } from 'react';
+import { supabase, useAuth } from './auth';
 import { onPlanWrite, writePlan, type PlanDraft } from './planStore';
 
 type SyncState = {
-  mode: 'checking' | 'account' | 'local' | 'error';
-  reason: string | null;
+  mode: 'local' | 'syncing' | 'account' | 'error';
   lastSaved: string | null;
+  userId: string | null;
 };
-
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-let client: SupabaseClient | null = null;
-let state: SyncState = { mode: 'checking', reason: null, lastSaved: null };
+let state: SyncState = { mode: 'local', lastSaved: null, userId: null };
 const listeners = new Set<() => void>();
 const set = (s: Partial<SyncState>) => {
   state = { ...state, ...s };
   listeners.forEach((l) => l());
 };
 
-/** Browser client with the publishable key only. The session lives under the `aum.` prefix so "clear my data" signs out too. */
-function supabase(): SupabaseClient | null {
-  if (!URL || !KEY) return null;
-  client ??= createClient(URL, KEY, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      storageKey: 'aum.auth',
-      detectSessionInUrl: false,
-    },
-  });
-  return client;
-}
-
-let started = false;
 let pushTimer: number | undefined;
 let applyingRemote = false;
+let unsubscribeWrites: (() => void) | null = null;
 
-async function start() {
-  if (started) return;
-  started = true;
-  const sb = supabase();
-  if (!sb) return set({ mode: 'local', reason: 'Account storage is not configured on this site.' });
+const localDraft = (): PlanDraft | null => {
   try {
-    let { data } = await sb.auth.getSession();
-    if (!data.session) {
-      const res = await sb.auth.signInAnonymously();
-      if (res.error) {
-        return set({
-          mode: 'local',
-          reason: /anonymous/i.test(res.error.message)
-            ? 'Private account saving is switched off for this demo (anonymous sign-ins disabled).'
-            : 'Could not create a private session.',
-        });
-      }
-      data = { session: res.data.session };
-    }
-    const uid = data.session?.user.id;
-    if (!uid) return set({ mode: 'local', reason: 'No session.' });
-    const { data: row, error } = await sb
-      .from('planner_profiles')
-      .select('draft, updated_at')
-      .eq('user_id', uid)
-      .maybeSingle();
-    if (error) return set({ mode: 'error', reason: 'Could not read your saved profile.' });
-    const local = readLocalUpdatedAt();
-    if (row && (!local || row.updated_at > local)) {
-      applyingRemote = true;
-      writePlan(() => ({ ...(row.draft as PlanDraft), updatedAt: row.updated_at }));
-      applyingRemote = false;
-    }
-    set({ mode: 'account', reason: null, lastSaved: row?.updated_at ?? null });
-    onPlanWrite((d) => {
-      if (applyingRemote) return;
-      window.clearTimeout(pushTimer);
-      pushTimer = window.setTimeout(() => void push(d), 800);
-    });
-    if (!row) void push(JSON.parse(window.localStorage.getItem('aum.plan.v1') ?? 'null'));
-  } catch {
-    set({
-      mode: 'error',
-      reason: 'The account service did not respond. Your data is still saved in this browser.',
-    });
-  }
-}
-
-function readLocalUpdatedAt(): string | null {
-  try {
-    const d = JSON.parse(window.localStorage.getItem('aum.plan.v1') ?? 'null') as PlanDraft | null;
-    return d && d.updatedAt && d.updatedAt > '1971' ? d.updatedAt : null;
+    return JSON.parse(window.localStorage.getItem('aum.plan.v1') ?? 'null');
   } catch {
     return null;
   }
+};
+
+/** Called whenever the logged-in user changes: pull the account copy (newer wins), then keep it in sync. */
+async function attach(userId: string | null) {
+  if (state.userId === userId) return;
+  unsubscribeWrites?.();
+  unsubscribeWrites = null;
+  if (!userId) return set({ mode: 'local', userId: null, lastSaved: null });
+  const sb = supabase();
+  if (!sb) return;
+  set({ mode: 'syncing', userId });
+  const { data: row, error } = await sb
+    .from('planner_profiles')
+    .select('draft, updated_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return set({ mode: 'error' });
+  const local = localDraft();
+  const localHasData =
+    !!local &&
+    (local.profile?.cards?.length || local.profile?.balances?.length || local.trip?.destination);
+  if (row && (!localHasData || !local?.updatedAt || row.updated_at > local.updatedAt)) {
+    applyingRemote = true;
+    writePlan(() => ({ ...(row.draft as PlanDraft), updatedAt: row.updated_at }));
+    applyingRemote = false;
+  } else if (local) {
+    await push(local);
+  }
+  set({ mode: 'account', lastSaved: row?.updated_at ?? state.lastSaved });
+  unsubscribeWrites = onPlanWrite((d) => {
+    if (applyingRemote) return;
+    window.clearTimeout(pushTimer);
+    pushTimer = window.setTimeout(() => void push(d), 700);
+  });
 }
 
-async function push(d: PlanDraft | null) {
+async function push(d: PlanDraft) {
   const sb = supabase();
-  if (!sb || !d || state.mode !== 'account') return;
-  const { data } = await sb.auth.getSession();
-  const uid = data.session?.user.id;
-  if (!uid)
-    return set({
-      mode: 'local',
-      reason: 'Your private session ended. Data is saved in this browser.',
-    });
+  if (!sb || !state.userId) return;
   const { error } = await sb
     .from('planner_profiles')
-    .upsert({ user_id: uid, draft: d, updated_at: d.updatedAt }, { onConflict: 'user_id' });
-  if (error)
-    set({
-      mode: 'error',
-      reason: 'Saving to your account failed; your data is safe in this browser.',
-    });
-  else set({ lastSaved: d.updatedAt });
+    .upsert(
+      { user_id: state.userId, draft: d, updated_at: d.updatedAt },
+      { onConflict: 'user_id' },
+    );
+  set(error ? { mode: 'error' } : { mode: 'account', lastSaved: d.updatedAt });
 }
 
+/** Saves a computed plan for logged-in users (one row per distinct set of inputs). */
 export async function savePlanResult(
   inputsHash: string,
   result: { engineVersion: string; verdict: { outcome: string } },
 ) {
   const sb = supabase();
-  if (!sb || state.mode !== 'account') return;
-  const { data } = await sb.auth.getSession();
-  const uid = data.session?.user.id;
-  if (!uid) return;
+  if (!sb || !state.userId) return;
   await sb.from('plans').upsert(
     {
-      user_id: uid,
+      user_id: state.userId,
       inputs_hash: inputsHash.slice(0, 64),
       engine_version: result.engineVersion,
       verdict: result.verdict.outcome,
@@ -140,19 +95,13 @@ export async function savePlanResult(
 
 async function deleteRemote() {
   const sb = supabase();
-  if (!sb || state.mode !== 'account') return;
-  const { data } = await sb.auth.getSession();
-  const uid = data.session?.user.id;
-  if (uid) {
-    await sb.from('plans').delete().eq('user_id', uid);
-    await sb.from('planner_profiles').delete().eq('user_id', uid);
-  }
-  await sb.auth.signOut();
-  started = false;
-  set({ mode: 'checking', lastSaved: null });
+  if (!sb || !state.userId) return;
+  await sb.from('plans').delete().eq('user_id', state.userId);
+  await sb.from('planner_profiles').delete().eq('user_id', state.userId);
 }
 
 export function useSync() {
+  const auth = useAuth();
   const s = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
@@ -162,13 +111,15 @@ export function useSync() {
     () => state,
   );
   useEffect(() => {
-    void start();
-  }, []);
+    if (auth.ready) void attach(auth.userId);
+  }, [auth.ready, auth.userId]);
   const statusText =
     s.mode === 'account'
-      ? 'A private copy is saved to your anonymous account (Supabase, row-level security: only you can read it).'
-      : s.mode === 'checking'
-        ? 'Checking private account storage…'
-        : `Saved in this browser only. ${s.reason ?? ''}`.trim();
-  return { ...s, enabled: s.mode === 'account', statusText, deleteRemote };
+      ? `Saved to your account (${auth.email}). Only you can read it.`
+      : s.mode === 'syncing'
+        ? 'Syncing with your account…'
+        : s.mode === 'error'
+          ? 'Could not save to your account; your data is safe in this browser.'
+          : 'Saved in this browser. Log in to keep it in your account.';
+  return { ...s, enabled: s.mode === 'account', statusText, deleteRemote, email: auth.email };
 }

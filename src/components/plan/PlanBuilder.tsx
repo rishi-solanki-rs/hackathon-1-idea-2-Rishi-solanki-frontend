@@ -53,7 +53,7 @@ function PlanBuilderInner() {
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-label="Full Trip Plan" className="grid gap-5">
+    <form onSubmit={submit} noValidate aria-label="Multi-city search" className="grid gap-5">
       <ol className="grid gap-4">
         {p.legs.map((l, i) => (
           <li key={i}>
@@ -187,7 +187,7 @@ function PlanBuilderInner() {
         </div>
       </div>
       <Button type="submit" className="w-full sm:w-auto sm:justify-self-end">
-        Plan my trip
+        Compare this trip
       </Button>
     </form>
   );

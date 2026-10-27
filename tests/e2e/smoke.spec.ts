@@ -25,16 +25,21 @@ test('security headers are set and the framework is not advertised', async ({ re
   expect(h['x-powered-by']).toBeUndefined();
 });
 
-test('landing shows the demo disclosure, the main CTA and the search form', async ({ page }) => {
+test('landing shows the demo disclosure and the main CTA; compare has the search form', async ({
+  page,
+}) => {
   await page.goto('/');
-  await expect(page.getByText(/Demo · Duffel test mode · no real bookings/)).toBeVisible();
+  await expect(page.getByText(/Demo · fares are Duffel test data/)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Plan my trip' }).first()).toBeVisible();
+  await page.goto('/compare');
   await expect(page.getByRole('form', { name: 'Quick Flight search' })).toBeVisible();
 });
 
-test('the planner opens on the first step', async ({ page }) => {
+test('the planner opens on the first step and the login page loads', async ({ page }) => {
   await page.goto('/plan');
-  await expect(page.getByRole('heading', { name: '1. Your trip' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where and when?' })).toBeVisible();
+  await page.goto('/login');
+  await expect(page.getByRole('main')).toBeVisible();
 });
 
 test('a quick search returns a labelled comparison', async ({ page }) => {

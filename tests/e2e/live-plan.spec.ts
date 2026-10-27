@@ -18,28 +18,26 @@ test('LIVE: plan with real Duffel test fares, AI explanation, and a real Duffel 
   await page.getByRole('button', { name: /Next: Points/ }).click();
   await page.getByRole('button', { name: 'Add a points balance' }).click();
   await page.getByLabel('Programme', { exact: true }).first().selectOption('iberia_club');
-  await page.getByLabel('Balance (Avios)').fill('20000');
-  await page.getByLabel('I found an award on the programme’s site').check();
-  await page.getByLabel('Points needed (all travellers)').fill('18000');
+  await page.getByLabel('Avios today').fill('20000');
+  await page.getByLabel('Yes, I found one on the programme’s site').check();
+  await page.getByLabel('Points (all travellers)').fill('18000');
   await page.getByLabel('Taxes and charges (€)').fill('60');
   await page.getByRole('button', { name: /Next: Spending/ }).click();
-  await page.getByLabel('Yes, always in full').check();
+  await page.getByLabel('Yes, always').check();
   await page.getByRole('button', { name: 'Build my plan' }).click();
 
-  const fares = page.getByRole('region', { name: 'Cash fares across your dates' });
+  const fares = page.getByRole('region', { name: 'When to book' });
   await expect(fares.getByText('Duffel test data')).toBeVisible({ timeout: 90_000 });
   await expect(fares.getByText(/€\d/).first()).toBeVisible();
-  const explain = page.getByRole('region', { name: 'In plain words' });
-  await expect(explain.getByText(/AI-written|Rules-based explanation/)).toBeVisible({
-    timeout: 60_000,
-  });
-  console.log(
-    'explanation source:',
-    await explain.getByText(/AI-written|Rules-based explanation/).textContent(),
-  );
+  await page.getByText('Explain this plan in plain words (AI)').click();
+  const source = page.getByText(/Written by AI|Rules-based explanation/);
+  await expect(source).toBeVisible({ timeout: 60_000 });
+  console.log('explanation source:', await source.textContent());
   await page.screenshot({ path: `test-results/screens/live-plan-result.png`, fullPage: true });
 
-  await page.getByRole('link', { name: 'Book the cheapest in test mode' }).click();
+  await page
+    .getByRole('link', { name: /Book this fare in test mode|Or book the cash fare \(test\)/ })
+    .click();
   await page.getByRole('button', { name: 'Confirm test booking' }).click();
   const accept = page.getByRole('button', { name: /Accept .* and book \(test\)/ });
   const done = page.getByRole('heading', { name: 'Test booking created' });

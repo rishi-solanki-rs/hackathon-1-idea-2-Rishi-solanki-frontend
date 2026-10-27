@@ -21,11 +21,13 @@ export function toTripInput(d: PlanDraft['trip']): TripInput {
   };
 }
 
-export function toAward(d: PlanDraft['award']): {
+export function toAward(
+  d: PlanDraft['award'],
+  holdsPoints = true,
+): {
   award: AwardInput | null;
   estimateAward: boolean;
 } {
-  if (d.mode === 'estimate') return { award: null, estimateAward: true };
   if (d.mode === 'entered' && num(d.points) && num(d.taxesEur) !== undefined)
     return {
       award: {
@@ -37,7 +39,8 @@ export function toAward(d: PlanDraft['award']): {
       },
       estimateAward: false,
     };
-  return { award: null, estimateAward: false };
+  // No award price entered: if the user holds points, a labelled rough estimate keeps points comparable with cash.
+  return { award: null, estimateAward: holdsPoints };
 }
 
 /** Only exact/range/unknown balances the user actually entered; rows with no programme are dropped. */
@@ -51,7 +54,10 @@ export function cleanProfile(p: Profile): Profile {
 }
 
 export function buildRequest(d: PlanDraft, useExample = false) {
-  const { award, estimateAward } = toAward(d.award);
+  const { award, estimateAward } = toAward(
+    d.award,
+    d.profile.balances.some((b) => b.program),
+  );
   const req = {
     trip: toTripInput(d.trip),
     profile: cleanProfile(d.profile),

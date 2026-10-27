@@ -53,7 +53,7 @@ export function PlanResults() {
       <Alert
         kind="warn"
         title="This trip is incomplete"
-        action={<ButtonLink href="/trips/multi">Plan a trip</ButtonLink>}
+        action={<ButtonLink href="/compare?mode=multi">Start again</ButtonLink>}
       >
         <ul className="list-disc pl-5">
           {issues.slice(0, 4).map((i) => (
@@ -67,7 +67,7 @@ export function PlanResults() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold tracking-[0.18em] text-terracotta uppercase">
-            Full Trip Plan
+            Multi-city comparison
           </p>
           <h1 className="mt-1 font-display text-2xl sm:text-3xl">
             {[request.legs[0].origin, ...request.legs.map((l) => l.destination)]
@@ -80,7 +80,7 @@ export function PlanResults() {
             Points: {qw.label}
           </p>
         </div>
-        <ButtonLink href="/trips/multi" variant="secondary">
+        <ButtonLink href="/compare?mode=multi" variant="secondary">
           Change trip
         </ButtonLink>
       </div>

@@ -22,7 +22,10 @@ const nextConfig: NextConfig = {
     },
   },
   async redirects() {
-    return [{ source: '/wallet', destination: '/plan', permanent: false }];
+    return [
+      { source: '/wallet', destination: '/plan', permanent: false },
+      { source: '/trips/multi', destination: '/compare?mode=multi', permanent: false },
+    ];
   },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];

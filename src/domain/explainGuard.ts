@@ -46,6 +46,24 @@ export function planFacts(r: PlanResult, programName: (id: string) => string): E
   for (const q of r.flights.quotes) addMinor(q.totalMinor);
   for (const b of r.allocation.bonuses) add(b.points);
   add(r.trip.adults);
+  add(r.gapAfterPlan);
+  for (const d of r.dailyCards) {
+    add(d.amountEur);
+    add(d.gainPerMonth);
+  }
+  for (const c of r.newCards) {
+    add(c.extraPoints);
+    add(c.welcomePoints);
+    add(c.feeEur);
+    add(c.netValueEur);
+    add(c.months);
+    add(c.monthlySpendEur);
+  }
+  add(r.booking.daysToDeparture);
+  add(r.booking.window.fromDays);
+  add(r.booking.window.toDays);
+  if (r.booking.spreadMinor !== null) addMinor(r.booking.spreadMinor);
+  for (const p of r.booking.peaks) for (const n of p.name.match(/\d+/g) ?? []) add(Number(n));
   const dates = new Set<string>([
     r.verdict.lsbd,
     r.trip.earliestDepart,
@@ -53,11 +71,16 @@ export function planFacts(r: PlanResult, programName: (id: string) => string): E
     ...r.flights.quotes.flatMap((q) => [q.depart, q.ret ?? '']),
   ]);
   if (r.pointsReady && r.pointsReady !== 'now') dates.add(r.pointsReady);
+  dates.add(r.booking.window.startDate);
+  dates.add(r.booking.window.endDate);
+  for (const c of r.newCards) if (c.applyBy) dates.add(c.applyBy);
   for (const a of r.allocation.assignments) if (a.postsOn) dates.add(a.postsOn);
   dates.delete('');
   const names = [
     ...new Set([
       ...r.allocation.assignments.map((a) => a.cardName ?? '').filter(Boolean),
+      ...r.dailyCards.map((d) => d.cardName ?? '').filter(Boolean),
+      ...r.newCards.filter((c) => c.status !== 'not_suitable').map((c) => c.name),
       programName(r.target),
       r.trip.origin,
       r.trip.destination,
@@ -68,12 +91,14 @@ export function planFacts(r: PlanResult, programName: (id: string) => string): E
     reasons: r.verdict.reasons,
     actions: r.actions.map((a) => a.title),
     missing: r.missing,
+    booking: [r.booking.headline, r.booking.detail],
+    newCards: r.newCards.map((c) => c.reasons),
   });
   return { numbers: nums, dates, names, text };
 }
 
 const BANNED =
-  /\b(guarantee[ds]?|definitely available|seat is available|seats are available|confirmed (seat|availability)|real (market )?price|live price|risk[- ]free|you will save)\b/i;
+  /\b(guarantee[ds]?|definitely available|seat is available|seats are available|confirmed (seat|availability)|real (market )?price|live price|risk[- ]free|you will save|prices? will (drop|fall|go down|rise|go up)|will (get|be) cheaper)\b/i;
 
 /** Rejects any explanation that states a number, date or claim not present in the plan's facts. */
 export function checkExplanation(
@@ -84,7 +109,11 @@ export function checkExplanation(
   if (!paragraphs.length || paragraphs.length > 6) return { ok: false, reason: 'wrong length' };
   const all = paragraphs.join('\n');
   if (all.length > 2500) return { ok: false, reason: 'too long' };
-  if (BANNED.test(all)) return { ok: false, reason: 'unsupported claim' };
+  // "approval is not guaranteed" is a caveat we ask for, not a claim.
+  const banned = all
+    .replace(/\b(not|never|no|isn['’]t|aren['’]t)\s+(be\s+)?guarantee[ds]?\b/gi, ' ')
+    .match(BANNED);
+  if (banned) return { ok: false, reason: `unsupported claim "${banned[0].toLowerCase()}"` };
   for (const d of all.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [])
     if (!facts.dates.has(d)) return { ok: false, reason: `unknown date ${d}` };
   const stripped = all.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');

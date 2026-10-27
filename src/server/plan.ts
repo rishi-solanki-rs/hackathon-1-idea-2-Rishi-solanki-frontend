@@ -11,8 +11,11 @@ import {
   PROGRAMS,
   REFERENCE_EUR_PER_POINT,
   TRANSFER_ROUTES,
+  airportByIata,
   programById,
 } from '@/fixtures/catalogue';
+import { CARD_CATALOGUE } from '@/fixtures/cardCatalogue';
+import { haversineKm } from '@/domain/bookingWindow';
 import {
   illustrativeAwardPoints,
   illustrativeAwardTaxesEur,
@@ -24,6 +27,12 @@ import { clientKey, errorResponse, okResponse, rateLimit, readJson, zodIssues } 
 import { madridToday } from './search';
 
 const AIRLINES = PROGRAMS.filter((p) => p.kind === 'airline').map((p) => p.id);
+
+function distance(from: string, to: string): number | null {
+  const a = airportByIata(from);
+  const b = airportByIata(to);
+  return a && b ? haversineKm(a, b) : null;
+}
 
 /** Rough award estimate for planning only: clearly ILLUSTRATIVE, never presented as a programme price. */
 export function estimateAward(req: PlanRequest): AwardInput {
@@ -73,6 +82,8 @@ export async function runPlan(req: PlanRequest, deps: PlanDeps = {}): Promise<Pl
       referenceEurPerPoint: REFERENCE_EUR_PER_POINT,
       programName: (id) => programById(id)?.name ?? id,
       programWebsite: (id) => programById(id)?.website,
+      distanceKm: distance(req.trip.origin, req.trip.destination),
+      cardOptions: CARD_CATALOGUE,
     },
     AIRLINES,
   );

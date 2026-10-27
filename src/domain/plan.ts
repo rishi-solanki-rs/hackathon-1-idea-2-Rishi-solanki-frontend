@@ -1,4 +1,12 @@
+import { bookingAdvice, type BookingAdvice } from './bookingWindow';
 import { allocate, type Allocation } from './cards';
+import {
+  dailyCards,
+  suggestNewCards,
+  type CardOption,
+  type DailyCard,
+  type NewCardSuggestion,
+} from './newCards';
 import { earningEvents, pointsNow, readyDate, type EarnEvent, type PointsNow } from './forecast';
 import { decideVerdict, type Verdict } from './verdict';
 import type { AwardInput, Profile, TripInput } from './profile';
@@ -58,6 +66,11 @@ export type PlanResult = {
   missing: string[];
   assumptions: string[];
   confidenceReasons: string[];
+  /** Points still missing at the safe booking date after planned spending; null without an award. */
+  gapAfterPlan: number | null;
+  dailyCards: DailyCard[];
+  newCards: NewCardSuggestion[];
+  booking: BookingAdvice;
 };
 
 export type PlanInputs = {
@@ -70,6 +83,10 @@ export type PlanInputs = {
   referenceEurPerPoint: string;
   programName: (id: ProgramId) => string;
   programWebsite: (id: ProgramId) => string | undefined;
+  /** Great-circle distance origin → destination, for the booking window (short vs long haul). */
+  distanceKm?: number | null;
+  /** Cards the user could apply for (official terms only). */
+  cardOptions?: CardOption[];
 };
 
 /** Programme the trip is measured in: the award's programme, else the airline programme the user holds most of. */
@@ -159,7 +176,35 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
     'Only necessary or committed purchases are counted; nothing extra is suggested.',
   ];
 
+  const earnedByLsbd = earnings.dated
+    .filter((e) => e.date <= verdict.lsbd)
+    .reduce((s, e) => s + e.points, 0);
+  const gapAfterPlan = award ? Math.max(0, verdict.shortfall - earnedByLsbd) : null;
+  const newCards = suggestNewCards({
+    today,
+    needBy: verdict.lsbd,
+    profile,
+    target,
+    routes,
+    eurPerPoint: valuation.eurPerPoint,
+    gap: gapAfterPlan,
+    cashIsBetter: verdict.outcome === 'CASH_BETTER',
+    candidates: input.cardOptions ?? [],
+  });
+  const booking = bookingAdvice({
+    today,
+    earliestDepart: trip.earliestDepart,
+    latestDepart: trip.latestDepart,
+    lsbd: verdict.lsbd,
+    distanceKm: input.distanceKm ?? null,
+    quotes: flights.quotes,
+  });
+
   const result: Omit<PlanResult, 'actions'> = {
+    gapAfterPlan,
+    dailyCards: dailyCards(profile, target, routes),
+    newCards,
+    booking,
     engineVersion: PLAN_ENGINE_VERSION,
     today,
     trip,
@@ -299,6 +344,24 @@ export function buildActions(
       detail: 'Card interest costs more than the points are worth. Pay the balance off first.',
     });
   }
+
+  const nc = r.newCards.find((c) => c.status === 'good_fit');
+  if (nc)
+    a.push({
+      id: 'new-card',
+      kind: 'verify',
+      when: nc.applyBy ? `Optional, apply by ${nc.applyBy}` : 'Optional',
+      title: `Consider the ${nc.name}`,
+      detail: `${nc.reasons[0]} Approval is not guaranteed and this is not financial advice.`,
+    });
+  if (r.booking.timing === 'early')
+    a.push({
+      id: 'recheck-price',
+      kind: 'deadline',
+      when: `From ${r.booking.window.startDate}`,
+      title: 'Check the fare again',
+      detail: r.booking.label,
+    });
 
   if (r.award && v.outcome !== 'CASH_BETTER')
     a.push({

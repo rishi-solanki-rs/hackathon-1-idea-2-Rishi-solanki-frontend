@@ -282,6 +282,62 @@ export const PlanResultSchema = z.object({
   missing: z.array(z.string()),
   assumptions: z.array(z.string()),
   confidenceReasons: z.array(z.string()),
+  gapAfterPlan: z.number().nullable(),
+  dailyCards: z.array(
+    z.object({
+      spendId: z.string(),
+      label: z.string(),
+      category: z.string(),
+      amountEur: z.number(),
+      cardId: z.string().nullable(),
+      cardName: z.string().nullable(),
+      pointsPerEuro: z.number(),
+      gainPerMonth: z.number(),
+    }),
+  ),
+  newCards: z.array(
+    z.object({
+      cardId: z.string(),
+      name: z.string(),
+      program: z.string(),
+      status: z.enum(['good_fit', 'possible', 'not_suitable']),
+      reasons: z.array(z.string()),
+      months: z.number(),
+      monthlySpendEur: z.number(),
+      extraPoints: z.number(),
+      welcomePoints: z.number(),
+      feeEur: z.number().nullable(),
+      netValueEur: z.number().nullable(),
+      coversGap: z.boolean().nullable(),
+      applyBy: z.string().nullable(),
+      eligibility: z.array(z.string()),
+      sourceUrl: z.string(),
+    }),
+  ),
+  booking: z.object({
+    daysToDeparture: z.number(),
+    haul: z.enum(['short', 'long', 'unknown']),
+    peaks: z.array(z.object({ name: z.string(), from: z.string(), to: z.string() })),
+    window: z.object({
+      fromDays: z.number(),
+      toDays: z.number(),
+      startDate: z.string(),
+      endDate: z.string(),
+    }),
+    timing: z.enum(['book_now', 'good_time', 'early']),
+    headline: z.string(),
+    detail: z.string(),
+    calendar: z.array(
+      z.object({
+        depart: z.string(),
+        ret: z.string().optional(),
+        totalMinor: Money,
+        vsCheapestMinor: Money,
+      }),
+    ),
+    spreadMinor: Money.nullable(),
+    label: z.string(),
+  }),
 });
 export type PlanResultDto = z.infer<typeof PlanResultSchema>;
 

@@ -2,10 +2,10 @@ import { expect, test } from '@playwright/test';
 import { LUCIA, expectNoHorizontalOverflow, jfk, pek, scl, seedWallet } from './helpers';
 
 test.describe('Quick Flight journey (TASK-015..017)', () => {
-  test('T-FUN-003: demo trip → results → detail → reload keeps the detail', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('link', { name: /Madrid → Santiago de Chile, business/ }).click();
-    await expect(page).toHaveURL(/\/results\?/);
+  test('T-FUN-003: example wallet link → results → detail → reload keeps the detail', async ({
+    page,
+  }) => {
+    await page.goto(`${scl()}&w=lucia`);
     const hero = page.getByRole('heading', { level: 2, name: /Save €1,674 \(57\.7%\)/ });
     await expect(hero).toBeVisible();
     await expect(page.getByText('Example saving · illustrative data')).toBeVisible();
@@ -66,7 +66,7 @@ test.describe('Quick Flight journey (TASK-015..017)', () => {
   test('form validation: missing destination is announced and focused; valid search navigates', async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.goto('/compare');
     const form = page.getByRole('form', { name: 'Quick Flight search' });
     await form.getByRole('button', { name: 'Compare cash and points' }).click();
     await expect(form.getByText('Choose where you want to go')).toBeVisible();

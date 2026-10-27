@@ -4,11 +4,7 @@ import { STORE, expectNoHorizontalOverflow, trip } from './helpers';
 test('T-FUN-002: CS-05 multi-city example → open-jaw cash €970, per-leg awards rejected with a reason', async ({
   page,
 }) => {
-  await page.goto('/');
-  await page
-    .getByRole('link', { name: /Multi-city: Madrid → Beijing → Shanghai → Madrid/ })
-    .click();
-  await expect(page).toHaveURL(/\/trips\/multi\/results\?/);
+  await page.goto(`${trip()}&w=marc`);
   await expect(
     page.getByRole('heading', { level: 2, name: 'No saving vs paying cash' }),
   ).toBeVisible();
@@ -26,9 +22,9 @@ test('T-FUN-002: CS-05 multi-city example → open-jaw cash €970, per-leg awar
 });
 
 test('multi-city builder validates, adds flights and searches', async ({ page }) => {
-  await page.goto('/trips/multi');
-  const form = page.getByRole('form', { name: 'Full Trip Plan' });
-  await form.getByRole('button', { name: 'Plan my trip' }).click();
+  await page.goto('/compare?mode=multi');
+  const form = page.getByRole('form', { name: 'Multi-city search' });
+  await form.getByRole('button', { name: 'Compare this trip' }).click();
   const to1 = form.getByRole('combobox', { name: 'To', exact: true }).first();
   await expect(to1).toHaveAttribute('aria-invalid', 'true');
   await expect(form.locator('#plan-legs-0-destination-error')).toHaveText('Choose an airport');
@@ -37,7 +33,7 @@ test('multi-city builder validates, adds flights and searches', async ({ page })
   await form.getByRole('button', { name: 'Add a flight' }).click();
   await expect(form.getByRole('heading', { name: 'Flight 3' })).toBeVisible();
   await form.getByRole('button', { name: 'Remove flight 3' }).click();
-  await form.getByRole('button', { name: 'Plan my trip' }).click();
+  await form.getByRole('button', { name: 'Compare this trip' }).click();
   await expect(page).toHaveURL(/\/trips\/multi\/results\?legs=MAD-LIS/);
   await expect(page.getByRole('region', { name: 'Every flight, every option' })).toBeVisible();
 });
@@ -59,5 +55,5 @@ test('approximate search notice is shown when the limit is hit', async ({ page }
 test('the old wallet address goes to Plan my trip', async ({ page }) => {
   await page.goto('/wallet');
   await expect(page).toHaveURL(/\/plan$/);
-  await expect(page.getByRole('heading', { name: '1. Your trip' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Where and when?' })).toBeVisible();
 });

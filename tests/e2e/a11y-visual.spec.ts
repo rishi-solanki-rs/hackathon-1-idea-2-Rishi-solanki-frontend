@@ -10,15 +10,22 @@ import {
 } from './helpers';
 
 const pages: { name: string; path: () => string; ready: RegExp | string }[] = [
-  { name: 'landing', path: () => '/', ready: 'Same trip. Much less money.' },
-  { name: 'plan-wizard', path: () => '/plan', ready: '1. Your trip' },
+  { name: 'landing', path: () => '/', ready: 'Your trip, your cards, one clear plan.' },
+  { name: 'plan-wizard', path: () => '/plan', ready: 'Where and when?' },
+  { name: 'compare', path: () => '/compare', ready: 'Cash or points for a flight' },
+  {
+    name: 'compare-multi',
+    path: () => '/compare?mode=multi',
+    ready: 'Cash or points for a flight',
+  },
   { name: 'results', path: scl, ready: /Save €1,674/ },
   { name: 'results-flex', path: pek, ready: /Save €78/ },
   { name: 'detail', path: () => `${scl()}`, ready: /Save €1,674/ },
-  { name: 'multi', path: () => '/trips/multi', ready: 'Plan a trip with several flights' },
   { name: 'multi-results', path: trip, ready: 'Tickets to book' },
-  { name: 'how', path: () => '/how-it-works', ready: 'How we calculate and rank' },
-  { name: 'settings', path: () => '/settings', ready: 'Your data stays in this browser' },
+  { name: 'how', path: () => '/how-it-works', ready: 'How your plan is made' },
+  { name: 'login', path: () => '/login', ready: 'Your account' },
+  { name: 'my-plans', path: () => '/my-plans', ready: /plans/i },
+  { name: 'settings', path: () => '/settings', ready: 'Privacy and your data' },
   { name: 'not-found', path: () => '/nope', ready: 'This page took a different flight' },
 ];
 

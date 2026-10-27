@@ -1,49 +1,74 @@
 import type { Metadata } from 'next';
 import { Card, SectionTitle } from '@/components/ui';
 import { REFERENCE_EUR_PER_POINT } from '@/fixtures/catalogue';
-import { t } from '@/i18n/en';
 
-export const metadata: Metadata = { title: 'How we calculate and rank' };
+export const metadata: Metadata = { title: 'How it works' };
 
-const terms = [
+const flow = [
   [
-    'Normal price',
-    'The cheapest cash ticket for your exact airports, dates, cabin and travellers. Fares you would not buy (other dates, other airports) never set the normal price.',
+    'Your answers',
+    'Trip, cards, points and spending. Saved in this browser while you type; if you log in, also in your account (Supabase, only you can read it).',
   ],
   [
-    'Cash paid today',
-    'Everything you pay in this booking: fare, taxes and fees as one all-in amount, or award taxes and charges.',
+    'Flight prices',
+    'Our server asks Duffel in test mode for up to 7 departure dates in your range. These are sandbox fares, not real prices.',
   ],
   [
-    'Paid separately',
-    'Costs caused by the option but paid elsewhere, such as a train to another airport. They count in the overall cost.',
+    'The plan engine',
+    'Fixed rules on our server (no AI) work out your usable points, which card to use for each spend, whether points beat cash, a new card idea and when to book. Same answers always give the same plan.',
   ],
   [
-    'Overall cost',
-    `Cash paid today + paid separately + points × your value per point. If you have not set a value we use €${REFERENCE_EUR_PER_POINT} as a reference, and you can change it.`,
+    'Plain-words explanation',
+    'Only if you open it, Google Gemini rewrites the finished plan in simple language. We check every number and date it writes against the plan; if anything does not match, we show a rules-based text instead.',
   ],
   [
-    'Saving',
-    'Normal price minus the overall cost of the best option, in euros and as a percentage of the normal price. If it is zero or negative, we say paying cash is better.',
+    'Booking',
+    'Book the cheapest fare as a Duffel test order. No money is charged and no real ticket is issued.',
   ],
+];
+
+const data = [
   [
-    'Break-even',
-    'The value per point at which an award costs the same as the cheapest cash fare. Below it, cash is better.',
+    'Real, from official pages',
+    'Card earn rates and fees, the Amex Gold welcome offer (each with a link and check date).',
+  ],
+  ['Test data', 'Flight prices and bookings from Duffel test mode.'],
+  ['Your input', 'Balances, award prices you found, spending, card details you typed.'],
+  [
+    'Estimates (always labelled)',
+    `Award prices when you did not enter one, the value of a point (€${REFERENCE_EUR_PER_POINT} unless you change it), and booking-time guidance.`,
   ],
 ];
 
 export default function HowItWorks() {
   return (
-    <div className="mx-auto grid max-w-4xl gap-8 px-4 py-8">
-      <SectionTitle as="h1" eyebrow="Transparency" title="How we calculate and rank">
-        Every number comes from deterministic rules you can check. No AI invents prices, balances or
-        savings.
+    <div className="mx-auto grid max-w-3xl gap-5 px-4 py-8">
+      <SectionTitle as="h1" eyebrow="How it works" title="How your plan is made">
+        Numbers come from rules you can check. AI never sets a price, a points amount or the
+        recommendation.
       </SectionTitle>
 
       <Card className="p-5 sm:p-6">
-        <h2 className="font-display text-xl">The terms we use</h2>
-        <dl className="mt-4 grid gap-4">
-          {terms.map(([k, v]) => (
+        <h2 className="font-display text-xl">From your answers to a plan</h2>
+        <ol className="mt-3 grid gap-3">
+          {flow.map(([k, v], i) => (
+            <li key={k} className="flex gap-3">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sea text-xs font-bold text-white">
+                {i + 1}
+              </span>
+              <div>
+                <p className="font-semibold">{k}</p>
+                <p className="text-sm text-ink-soft">{v}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <h2 className="font-display text-xl">What is real, test or estimated</h2>
+        <dl className="mt-3 grid gap-3">
+          {data.map(([k, v]) => (
             <div key={k}>
               <dt className="font-semibold">{k}</dt>
               <dd className="text-sm text-ink-soft">{v}</dd>
@@ -53,76 +78,75 @@ export default function HowItWorks() {
       </Card>
 
       <Card className="p-5 sm:p-6">
-        <h2 className="font-display text-xl">How options are ranked</h2>
-        <ol className="mt-3 grid list-decimal gap-2 pl-5 text-sm text-ink-soft">
+        <h2 className="font-display text-xl">How the recommendation is decided</h2>
+        <ul className="mt-3 grid list-disc gap-2 pl-5 text-sm text-ink-soft">
           <li>
-            Options you cannot book (not enough points, out-of-date exchange rate) are listed
-            separately with the reason.
+            <strong className="text-ink">Overall cost</strong> of an award = taxes + points × value
+            per point. If that is lower than the cash fare (or, with the “least cash” goal, if the
+            taxes are lower), points win.
           </li>
           <li>
-            <strong className="text-ink">{t.objective.B_ECONOMIC_COST}</strong> (default) sorts by
-            overall cost. <strong className="text-ink">{t.objective.A_CASH_TODAY}</strong> sorts by
-            cash paid today, then overall cost.
+            <strong className="text-ink">Safe booking date</strong> = your book-by date (or 21 days
+            before departure) minus a 3-day buffer.
           </li>
           <li>
-            Ties are broken the same way every time: overall cost or cash today, then fewer points,
-            then a fixed option order.
+            If you are short of points, we only count spending you already plan, on the 15th of each
+            month, and only if you pay your card in full. If that closes the gap before the safe
+            date, we say so; otherwise we say book cash.
           </li>
           <li>
-            For multi-flight trips we compare one-way, open-jaw and multi-city tickets with a
-            bounded search, sharing one points balance across the trip. If the search hits its
-            limit, we say “approximate”.
+            Award seats are usually released about 355 days before departure; before that we say
+            wait and do not transfer.
           </li>
-          <li>
-            No airline, bank or card pays us to rank. There are no commissions or sponsored results.
-          </li>
-        </ol>
-      </Card>
-
-      <Card className="p-5 sm:p-6">
-        <h2 className="font-display text-xl">Where numbers come from</h2>
-        <ul className="mt-3 grid gap-2 text-sm text-ink-soft">
-          {Object.entries(t.provenance).map(([k, v]) => (
-            <li key={k}>
-              <strong className="text-ink">{v}</strong>
-              {descriptions[k] ? `: ${descriptions[k]}` : ''}
-            </li>
-          ))}
         </ul>
       </Card>
 
       <Card className="p-5 sm:p-6">
-        <h2 className="font-display text-xl">What we never count as a saving</h2>
+        <h2 className="font-display text-xl">Card advice</h2>
         <ul className="mt-3 grid list-disc gap-2 pl-5 text-sm text-ink-soft">
           <li>
-            Points you might earn in the future, sign-up bonuses you have not received, or
-            illustrative card rewards.
+            <strong className="text-ink">Everyday card:</strong> for each monthly spend, the card
+            you hold that earns the most points for this trip’s programme (after a transfer where
+            one exists).
           </li>
           <li>
-            Spending you would not otherwise do. We never suggest extra spending or carrying a card
-            balance to earn points.
+            <strong className="text-ink">New card:</strong> we check Spanish cards you don’t hold.
+            Points = your existing monthly spending moved to that card for the months left before
+            your safe date (about 14 days to get the card, about 30 days for points to post), minus
+            what your current cards already earn. A welcome offer counts only if your normal
+            spending already meets its minimum; the fee is pro-rated. We show the latest date to
+            apply.
           </li>
           <li>
-            Points you do not have today. Transfers are shown only from points already in your
-            wallet.
+            Never suggested if you carry a card balance. Approval is up to the bank. This is not
+            financial advice.
           </li>
+        </ul>
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <h2 className="font-display text-xl">When to book</h2>
+        <p className="mt-3 text-sm text-ink-soft">
+          Nobody can forecast fares, so we use common rules of thumb: about 3 to 8 weeks ahead
+          within Europe and 2 to 6 months for long haul, earlier for Spanish peak periods (Christmas
+          and Reyes, Semana Santa, puentes, July and August). We also show the price for each date
+          we checked and, when you come back, whether the cheapest fare went up or down since your
+          last check.
+        </p>
+      </Card>
+
+      <Card className="p-5 sm:p-6">
+        <h2 className="font-display text-xl">What we never do</h2>
+        <ul className="mt-3 grid list-disc gap-2 pl-5 text-sm text-ink-soft">
+          <li>Suggest spending more, buying points or carrying a balance to earn points.</li>
+          <li>Ask for card numbers, PINs or bank logins.</li>
+          <li>
+            Say a seat is available: always check it on the programme’s own site before moving
+            points.
+          </li>
+          <li>Take commissions or sponsored rankings.</li>
         </ul>
       </Card>
     </div>
   );
 }
-
-const descriptions: Record<string, string> = {
-  LIVE_TEST_DUFFEL:
-    'returned by the Duffel sandbox in test mode. Sandbox airlines and prices are not real.',
-  FIXTURE_FLIGHT: 'a fixed example fare built into the demo. Not a market price.',
-  FIXTURE_AWARD: 'an example award price. Seat availability is not checked.',
-  USER_ENTERED: 'something you typed in.',
-  VERIFIED_OFFICIAL_RULE:
-    'checked against an official page on a stated date (none in this demo yet).',
-  EXTERNAL_FX_SNAPSHOT:
-    'European Central Bank reference rate via Frankfurter, with its date. Older than 7 days is never used.',
-  FIXTURE_FX: 'a bundled ECB rate from 26 Oct 2026, used when the live rate is unavailable.',
-  CACHED: 'seen earlier and possibly out of date.',
-  ESTIMATE: 'a rough estimate, such as a train fare.',
-};

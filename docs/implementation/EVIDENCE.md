@@ -1,5 +1,27 @@
 # Implementation evidence (A Una Milla)
 
+## Round 3 — 27 Oct 2026 ~14:45 IST (minimal planner rebuild: login, recommendations, mobile-first UI)
+
+**Auth:** Supabase auth configured via the Management API (`scripts/live/configure-auth.mjs`, PATCH 200, then re-read): email sign-up on, autoconfirm on, anonymous off, password ≥ 8, site URL + redirect list. Access token local only.
+
+**What changed**
+- Wizard: per-field validation (`src/lib/planValidation.ts`), errors under the field with `aria-invalid`/`aria-describedby`, focus on the first error, Next blocked, "Fix N fields" line, sticky Back/Next bar on mobile, card summary row + Edit, spending presets, payment as big buttons, labelled award estimate only when the user holds points.
+- Engine: `src/domain/newCards.ts` (daily card per spend; new-card ideas with the official Amex Gold welcome offer, pro-rated fee, apply-by date, gates) and `src/domain/bookingWindow.ts` (Easter/Spanish peaks, rule-of-thumb windows, price calendar, price trend). Integrated into `computePlan`, the result contract and the Gemini facts/guard.
+- Amex Gold welcome terms re-read on official American Express Spain pages (27 Oct 2026): 2,000 MR per 30-day month with ≥ €1,000 spend, first 10 months, max 20,000; new cardholders only; usually 10 working days to post, up to 180.
+- Result screen: recommendation + one main button, next 3 steps, when to book, your cards, your points, AI (opens on demand), details folded.
+- `/compare` (One trip / Multi-city tabs), `/trips/multi` → redirect, clean home, `/login`, `/my-plans`, header account button.
+
+**Checks (local, 27 Oct ~14:40)**
+
+| Check | Result |
+|---|---|
+| `pnpm verify` | Pass: format, lint, types, **136** unit/integration tests, secret scan 0 findings, env, encoding |
+| Playwright (fixture server) | **161 passed**, 3 skipped (LIVE-only): 53 journeys × 360/768/1280 + 5 smoke, light + dark, axe clean, no horizontal overflow |
+| `pnpm test:live` | Pass (5/5): Duffel 7 dates priced, reprice, **Duffel TEST order** created; Gemini `gemini-3.5-flash-lite` explanation accepted by the guard; Supabase email accounts A/B: RLS isolation, re-login restores data, test users deleted |
+| `pnpm build` + `check:bundle:local` | Pass, no server secrets or server env names in 30 client files |
+
+Found and fixed during QA: the AI guard rejected "approval is not guaranteed" (a caveat), now allowed while positive guarantees and price forecasts are rejected; the award estimate is no longer applied for users with no points; the multi-city submit button no longer says "Plan my trip".
+
 ## Round 2 verification — 27 Oct 2026 ~12:50 IST (real providers, values never printed)
 
 **Credentials:** `frontend/.env.local` (gitignored, confirmed with `git check-ignore`). `scripts/live/check-connections.mjs` reports lengths only.

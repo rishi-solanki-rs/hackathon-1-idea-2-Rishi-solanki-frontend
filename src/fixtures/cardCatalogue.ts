@@ -1,3 +1,4 @@
+import type { WelcomeOffer } from '@/domain/newCards';
 import type { EarnRule, Sourced, SpendCategory } from '@/domain/profile';
 
 /**
@@ -15,11 +16,14 @@ export type CatalogueCard = {
   postingDelayDays: Sourced<number>;
   notes: string[];
   sourceUrl: string;
+  /** Only offers whose terms were read on the official page. */
+  welcome?: WelcomeOffer;
 };
 
 const CHECKED = '2026-10-27';
 const MR_TERMS = 'https://www.americanexpress.com/es-es/rewards/membership-rewards/terms';
 const GOLD = 'https://www.americanexpress.com/es-es/tarjetas/tarjetas-de-cargo/tarjeta-gold-card/';
+const AMEX_WELCOME = 'https://www.americanexpress.com/es/tarjetas/requisitos-para-solicitar/';
 const IBERIA_CARDS = 'https://www.iberiacards.es/tarjetas-personales/';
 const IBERIA_COMPARE =
   'https://www.iberiacards.es/blog/tu-tarjeta/aire-vs-icon-vs-icon-plus-vs-zenit/';
@@ -69,9 +73,25 @@ export const CARD_CATALOGUE: CatalogueCard[] = [
     notes: [
       '1 point per €2 in general, 1 per €1 at selected travel companies only, 1 per €5 at Spanish supermarkets (official MR terms).',
       'Fee €16 per month (official Gold page).',
-      'The welcome offer is paid per month of spending and is not planned here.',
+      'Welcome offer for new cardholders: 2,000 MR points for each 30-day month with €1,000 spend, for the first 10 months (up to 20,000).',
     ],
     sourceUrl: GOLD,
+    welcome: {
+      pointsPerPeriod: 2000,
+      periodDays: 30,
+      minSpendPerPeriodEur: 1000,
+      maxPeriods: 10,
+      maxPoints: 20000,
+      typicalPostingDays: 14,
+      eligibility: [
+        'Only for new cardholders: no Amex card held or cancelled in the last 12 months, and no other personal Amex card.',
+        'Points usually post about 10 working days after the spending, but can take up to 180 days.',
+        'American Express can change or end the offer at any time.',
+      ],
+      extras: ['€100 hotel credit (official comparison page); not counted here.'],
+      sourceUrl: AMEX_WELCOME,
+      checkedAt: CHECKED,
+    },
   },
   {
     id: 'iberia_aire',

@@ -17,6 +17,8 @@ const SYSTEM = [
   'Never say a seat is available or confirmed, never call prices real or live (they are test data), never promise savings.',
   'Say plainly which values are unverified or estimated, and what to do now versus later.',
   'Never mention JSON field names (such as seatConfirmed or pointsUsableNow); describe them in everyday words.',
+  'Booking-time advice is general guidance, never a price forecast: do not say prices will drop or rise.',
+  'If a new card idea is given, mention it as optional and say approval is not guaranteed.',
   'Return JSON {"paragraphs": [...]} with 3 or 4 short paragraphs in plain English.',
 ].join(' ');
 
@@ -69,6 +71,35 @@ export function factsForModel(p: PlanResult) {
         points: a.targetPoints,
       })),
     pointsFromPlannedSpending: p.allocation.totalTargetPoints,
+    pointsStillMissingAtSafeDate: p.gapAfterPlan,
+    bestCardForDailySpending: p.dailyCards
+      .filter((d) => d.cardName)
+      .map((d) => ({
+        spend: d.label,
+        card: d.cardName,
+        extraPointsPerMonthVsToday: d.gainPerMonth,
+      })),
+    newCardIdea: (() => {
+      const c = p.newCards.find((x) => x.status !== 'not_suitable');
+      return c
+        ? {
+            card: c.name,
+            fit: c.status === 'good_fit' ? 'good fit' : 'possible',
+            why: c.reasons[0],
+            extraPoints: c.extraPoints,
+            welcomePoints: c.welcomePoints,
+            feeEur: c.feeEur,
+            applyBy: c.applyBy,
+            note: 'approval not guaranteed; not financial advice',
+          }
+        : null;
+    })(),
+    whenToBook: {
+      advice: p.booking.headline,
+      detail: p.booking.detail,
+      guidanceOnly: p.booking.label,
+      busySpanishPeriods: p.booking.peaks.map((x) => x.name),
+    },
     unverifiedOrMissing: [...p.missing, ...p.confidenceReasons],
     nextSteps: p.actions.slice(0, 6).map((a) => `${a.when}: ${a.title}`),
   };
