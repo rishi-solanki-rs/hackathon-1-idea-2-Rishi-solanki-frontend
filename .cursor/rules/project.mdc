@@ -1,0 +1,12 @@
+---
+description: A Una Milla core engineering rules (money, provenance, test mode, secrets, testing)
+alwaysApply: true
+---
+
+- Read `AGENTS.md` and `docs/project-b/technical/12_PRE_BUILD_CORRECTIONS_2026-10-27.md` before changing the engine, contracts or providers.
+- Money: integer cents via `src/domain/money.ts`; never floats for amounts; one `CostLine` per cost.
+- Provenance: every displayed price keeps its `provenance` and `sourceLabel`; fixtures and Duffel test data are never presented as live or real.
+- Duffel: test tokens only (`duffel_test_`), assert `live_mode === false`, never retry `POST /air/orders`.
+- No card numbers, CVV, PINs, passport data or real personal data anywhere (code, fixtures, tests, logs).
+- Do not weaken or skip a failing test; fix the root cause. Unit/integration tests must not hit the network.
+- Supabase MCP must not be used with account-wide write access; backend changes go through migrations in the backend repo and local tests.
