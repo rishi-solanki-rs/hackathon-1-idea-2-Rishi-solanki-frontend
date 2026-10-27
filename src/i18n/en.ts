@@ -2,18 +2,18 @@
 export const en = {
   brand: 'A Una Milla',
   tagline: 'Same trip. Much less money.',
-  demoBanner: 'Demo · test mode · illustrative prices · your data stays in this browser',
+  demoBanner: 'Demo · Duffel test mode · no real bookings · your data is private to you',
   clearDemoData: 'Clear demo data',
   cleared: 'Demo data cleared from this browser.',
   nav: {
+    plan: 'Plan my trip',
     quick: 'Quick Flight',
-    plan: 'Full Trip Plan',
-    wallet: 'Wallet',
+    multi: 'Multi-city',
     how: 'How it works',
-    settings: 'Privacy',
+    settings: 'Settings',
   },
   footer:
-    'A Una Milla is a hackathon demo. Prices are illustrative fixtures or Duffel test data, never real market fares. Test bookings issue no ticket and charge no money. Not financial advice.',
+    'A Una Milla is a hackathon demo. Fares are Duffel test-mode data or labelled examples, never real market prices. Test bookings issue no ticket and charge no money. Card terms show their source. Not financial advice.',
   provenance: {
     LIVE_TEST_DUFFEL: 'Duffel test data',
     FIXTURE_FLIGHT: 'Illustrative fare',

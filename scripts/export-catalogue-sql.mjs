@@ -2,6 +2,7 @@
 // backend repo's supabase/seed.sql. Usage: node scripts/export-catalogue-sql.mjs ../backend/supabase/seed.sql
 import { writeFileSync } from 'node:fs';
 import { AIRPORTS, PROGRAMS, TRANSFER_ROUTES } from '../src/fixtures/catalogue.ts';
+import { CARD_CATALOGUE } from '../src/fixtures/cardCatalogue.ts';
 
 const q = (v) => (v === undefined || v === null ? 'null' : `'${String(v).replaceAll("'", "''")}'`);
 const arr = (xs) => `array[${xs.map(q).join(', ')}]::text[]`;
@@ -25,6 +26,12 @@ const out = [
   TRANSFER_ROUTES.map(
     (r) =>
       `  (${q(r.id)}, ${q(r.from)}, ${q(r.to)}, ${r.num}, ${r.den}, ${r.min}, ${r.increment}, ${q(r.status)}, ${q(r.verification)}, ${r.maxDelayDays}, ${arr(r.preconditions)}, ${q(r.sourceUrl)}, ${q(r.checkedAt)})`,
+  ).join(',\n') + ';',
+  '',
+  'insert into public.card_products (id, name, issuer, country, program, earn, annual_fee_eur, annual_fee_status, notes, source_url, checked_at) values',
+  CARD_CATALOGUE.map(
+    (c) =>
+      `  (${q(c.id)}, ${q(c.name)}, ${q(c.issuer)}, ${q(c.country)}, ${q(c.program)}, ${q(JSON.stringify(c.earn))}::jsonb, ${c.annualFeeEur.value ?? 'null'}, ${q(c.annualFeeEur.status)}, ${arr(c.notes)}, ${q(c.sourceUrl)}, ${q(c.earn[0].pointsPerEuro.checkedAt)})`,
   ).join(',\n') + ';',
   '',
 ];

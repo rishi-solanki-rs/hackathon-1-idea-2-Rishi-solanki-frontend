@@ -11,7 +11,8 @@ import {
   type PlanSearchResponse,
 } from '@/contracts/search';
 import { t } from '@/i18n/en';
-import { PRESETS, useGuest, useHydrated, walletForRequest } from '@/lib/guestStore';
+import { useHydrated } from '@/lib/guestStore';
+import { useQuickWallet } from '@/lib/quickWallet';
 import { queryToPlan } from '@/lib/query';
 import { useCachedPost } from '@/lib/useApi';
 import { ProvenanceBadge } from '../Badges';
@@ -23,12 +24,12 @@ import { priceLabel } from '../results/OptionSummary';
 
 export function PlanResults() {
   const sp = useSearchParams();
-  const guest = useGuest();
+  const qw = useQuickWallet();
   const hydrated = useHydrated();
   const { request, issues, query } = useMemo(() => {
     const raw = {
       ...queryToPlan(new URLSearchParams(sp.toString())),
-      wallet: walletForRequest(guest.wallet),
+      wallet: qw.wallet,
     };
     const r = PlanSearchRequestSchema.safeParse(raw);
     return {
@@ -36,7 +37,7 @@ export function PlanResults() {
       issues: r.success ? [] : r.error.issues.map((i) => i.message),
       query: sp.toString(),
     };
-  }, [sp, guest]);
+  }, [sp, qw]);
   const key = hydrated && request ? `plan.${query}.${JSON.stringify(request.wallet)}` : null;
   const [state, retry] = useCachedPost(
     key,
@@ -52,7 +53,7 @@ export function PlanResults() {
       <Alert
         kind="warn"
         title="This trip is incomplete"
-        action={<ButtonLink href="/plan">Plan a trip</ButtonLink>}
+        action={<ButtonLink href="/trips/multi">Plan a trip</ButtonLink>}
       >
         <ul className="list-disc pl-5">
           {issues.slice(0, 4).map((i) => (
@@ -71,20 +72,20 @@ export function PlanResults() {
           <h1 className="mt-1 font-display text-2xl sm:text-3xl">
             {[request.legs[0].origin, ...request.legs.map((l) => l.destination)]
               .map(cityOf)
-              .join(' ? ')}
+              .join(' → ')}
           </h1>
           <p className="mt-1 text-sm text-ink-soft">
-            {request.legs.length} flights � {request.adults} adult{request.adults > 1 ? 's' : ''} �{' '}
-            {t.cabin[request.cabin]} � Ranked by {t.objective[request.objective].toLowerCase()} �
-            Wallet: {PRESETS[guest.wallet.profile]?.label ?? 'yours'}
+            {request.legs.length} flights · {request.adults} adult{request.adults > 1 ? 's' : ''} ·{' '}
+            {t.cabin[request.cabin]} · Ranked by {t.objective[request.objective].toLowerCase()} ·
+            Points: {qw.label}
           </p>
         </div>
-        <ButtonLink href="/plan" variant="secondary">
+        <ButtonLink href="/trips/multi" variant="secondary">
           Change trip
         </ButtonLink>
       </div>
       {state.kind === 'loading' || state.kind === 'idle' ? (
-        <ResultsSkeleton label="Checking ticket combinations�" />
+        <ResultsSkeleton label="Checking ticket combinations…" />
       ) : null}
       {state.kind === 'error' ? (
         <Alert
@@ -105,7 +106,7 @@ export function PlanResults() {
 }
 
 function covers(o: OptionDto, legs: PlanSearchResponse['data']['legs']) {
-  return o.legIndexes.map((i) => `${legs[i].origin}?${legs[i].destination}`).join(' + ');
+  return o.legIndexes.map((i) => `${legs[i].origin}→${legs[i].destination}`).join(' + ');
 }
 
 function PlanLoaded({ res }: { res: PlanSearchResponse }) {
@@ -146,7 +147,7 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
         <Card className="overflow-hidden">
           <div className="grid md:grid-cols-[1.1fr_1fr]">
             <div className="p-5 sm:p-6">
-              <Badge tone="gold">Example result � illustrative data</Badge>
+              <Badge tone="gold">Example result · illustrative data</Badge>
               <h2 className="mt-3 font-display text-3xl leading-tight">
                 {d.economicSaving && d.economicSaving.minor > 0 ? (
                   <>
@@ -165,7 +166,7 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                   Normal price
                 </dt>
                 <dd className="mt-1 font-display text-2xl tabular">
-                  {d.normal ? eur(d.normal.cashTotal, true) : '�'}
+                  {d.normal ? eur(d.normal.cashTotal, true) : '—'}
                 </dd>
                 <dd className="text-xs text-ink-soft">Cheapest all-cash way to book</dd>
               </div>
@@ -177,7 +178,7 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                   {best.ec ? eur(best.ec, true) : eur(best.cashTotal, true)}
                 </dd>
                 <dd className="text-xs text-ink-soft">
-                  {best.tickets} ticket{best.tickets > 1 ? 's' : ''} � cash today{' '}
+                  {best.tickets} ticket{best.tickets > 1 ? 's' : ''} · cash today{' '}
                   {eur(best.cashToday, true)}
                 </dd>
               </div>
@@ -208,7 +209,7 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                         : {covers(o, d.legs)}
                       </p>
                       <p className="mt-1 text-sm text-ink-soft">
-                        {o.slices.map((s) => `${dateOf(s.departAt)} ${s.from}?${s.to}`).join(' � ')}
+                        {o.slices.map((s) => `${dateOf(s.departAt)} ${s.from}→${s.to}`).join(' · ')}
                       </p>
                       <div className="mt-2">
                         <ProvenanceBadge p={o.provenance} />
@@ -233,7 +234,7 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
             return (
               <Card key={i} className="p-4">
                 <h3 className="font-semibold">
-                  Flight {i + 1}: {airportLabel(l.origin)} ? {airportLabel(l.destination)}
+                  Flight {i + 1}: {airportLabel(l.origin)} → {airportLabel(l.destination)}
                 </h3>
                 <p className="text-sm text-ink-muted">{dateOf(l.date)}</p>
                 <table className="mt-3 w-full text-sm">
@@ -264,11 +265,11 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                               ? `Combined ticket (${covers(o, d.legs)})`
                               : 'Cash'}
                           {best?.optionIds.includes(o.id) ? (
-                            <span className="ml-1 font-semibold text-sea-dark">� chosen</span>
+                            <span className="ml-1 font-semibold text-sea-dark">· chosen</span>
                           ) : null}
                         </td>
                         <td className="py-2 pl-3 text-right tabular">{priceLabel(o)}</td>
-                        <td className="py-2 pl-3 text-right tabular">{o.ec ? eur(o.ec) : '�'}</td>
+                        <td className="py-2 pl-3 text-right tabular">{o.ec ? eur(o.ec) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -308,10 +309,10 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                       .map((id) => byId.get(id))
                       .filter(Boolean)
                       .map((o) => `${o!.kind === 'award' ? 'Award' : 'Cash'} ${covers(o!, d.legs)}`)
-                      .join(' � ')}
+                      .join(' · ')}
                   </span>
                   <span className="font-semibold tabular">
-                    {c.ec ? eur(c.ec, true) : '�'} � {diffText(c)}
+                    {c.ec ? eur(c.ec, true) : '—'} · {diffText(c)}
                   </span>
                 </Card>
               </li>

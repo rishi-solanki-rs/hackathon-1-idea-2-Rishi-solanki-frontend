@@ -72,7 +72,7 @@ function QuickSearchFormInner({ initial }: { initial?: Partial<QuickParams> }) {
         {(['return', 'one_way'] as const).map((tt) => (
           <label
             key={tt}
-            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-white px-4 text-sm font-semibold has-[:checked]:border-sea has-[:checked]:bg-sea-soft has-[:checked]:text-sea-dark"
+            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold has-[:checked]:border-sea has-[:checked]:bg-sea-soft has-[:checked]:text-sea-dark"
           >
             <input
               type="radio"
@@ -99,7 +99,7 @@ function QuickSearchFormInner({ initial }: { initial?: Partial<QuickParams> }) {
         <button
           type="button"
           onClick={() => setP((s) => ({ ...s, origin: s.destination, destination: s.origin }))}
-          className="mb-0.5 hidden size-11 place-items-center rounded-full border border-line bg-white text-ink-soft hover:text-sea sm:grid"
+          className="mb-0.5 hidden size-11 place-items-center rounded-full border border-line bg-surface text-ink-soft hover:text-sea sm:grid"
           aria-label="Swap origin and destination"
         >
           <ArrowLeftRight aria-hidden className="size-4" />
@@ -226,7 +226,7 @@ function QuickSearchFormInner({ initial }: { initial?: Partial<QuickParams> }) {
           {(['B_ECONOMIC_COST', 'A_CASH_TODAY'] as const).map((g) => (
             <label
               key={g}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-white px-3 has-[:checked]:border-sea has-[:checked]:bg-sea-soft"
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-3 has-[:checked]:border-sea has-[:checked]:bg-sea-soft"
             >
               <input
                 type="radio"

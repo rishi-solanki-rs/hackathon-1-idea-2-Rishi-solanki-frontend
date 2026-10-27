@@ -2,7 +2,7 @@ import Image from 'next/image';
 import { Calculator, ListChecks, ShieldCheck } from 'lucide-react';
 import { QuickSearchForm } from '@/components/QuickSearchForm';
 import { DemoTrips } from '@/components/DemoTrips';
-import { Card, SectionTitle } from '@/components/ui';
+import { ButtonLink, Card, SectionTitle } from '@/components/ui';
 import hero from '../../public/images/hero-andalusia.jpg';
 import madrid from '../../public/images/dest-madrid.jpg';
 import barcelona from '../../public/images/dest-barcelona.jpg';
@@ -60,33 +60,49 @@ export default function Home() {
           className="absolute inset-0 -z-10 h-full w-full object-cover"
         />
         <div
-          className="absolute inset-0 -z-10 bg-gradient-to-b from-ink/70 via-ink/45 to-ivory"
+          className="absolute inset-0 -z-10 bg-gradient-to-b from-[#0b1420]/75 via-[#0b1420]/45 to-ivory"
           aria-hidden
         />
         <div className="mx-auto max-w-6xl px-4 pt-12 pb-10 sm:pt-16">
           <div className="max-w-2xl text-white">
-            <p className="text-xs font-semibold tracking-[0.2em] text-gold-soft uppercase">
+            <p className="text-xs font-semibold tracking-[0.2em] text-[#f6ecd2] uppercase">
               Travel hacking from Spain, made honest
             </p>
             <h1 className="mt-3 font-display text-4xl leading-tight sm:text-5xl">
               Same trip. Much less money.
             </h1>
             <p className="mt-4 text-lg text-white/90">
-              See what your flight really costs in cash, with points, or with a smarter date or
-              airport, and exactly how much you would save.
+              Tell us your trip, the cards you hold and the points you have. We build a personal
+              plan: which card to use for spending you already planned, whether points beat cash,
+              and when to book.
             </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <ButtonLink href="/plan" className="px-6 text-base">
+                Plan my trip
+              </ButtonLink>
+              <a
+                href="#quick"
+                className="inline-flex min-h-11 items-center rounded-full border border-white/60 px-5 text-sm font-semibold text-white hover:bg-white/10"
+              >
+                Just compare one flight
+              </a>
+            </div>
           </div>
-          <Card className="mt-8 p-5 sm:p-6">
-            <h2 className="mb-4 font-display text-xl">Quick Flight</h2>
+          <Card id="quick" className="mt-8 scroll-mt-4 p-5 sm:p-6">
+            <h2 className="mb-1 font-display text-xl">Quick Flight</h2>
+            <p className="mb-4 text-sm text-ink-soft">
+              Compare cash and points for one trip using the points you saved in Plan my trip.
+            </p>
             <QuickSearchForm />
           </Card>
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-10" aria-labelledby="demo-trips">
-        <SectionTitle id="demo-trips" eyebrow="Try it in one click" title="Example trips">
-          Each example loads a fictional demo wallet so you can see the full comparison. All prices
-          are illustrative.
+        <SectionTitle id="demo-trips" eyebrow="Labelled examples" title="Try an example">
+          Each example uses a fictional wallet for that search only; your own data is never changed.
+          Cash fares come from Duffel test mode when it is configured, otherwise from labelled
+          example fares.
         </SectionTitle>
         <div className="mt-6">
           <DemoTrips />

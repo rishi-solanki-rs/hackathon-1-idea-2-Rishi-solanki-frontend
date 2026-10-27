@@ -8,18 +8,16 @@ import {
   type QuickSearchRequest,
 } from '@/contracts/search';
 import { queryToQuick } from './query';
-import { useGuest, useHydrated, walletForRequest } from './guestStore';
+import { useHydrated } from './guestStore';
+import { useQuickWallet } from './quickWallet';
 import { useCachedPost } from './useApi';
 
 export function useQuickRequest() {
   const sp = useSearchParams();
-  const guest = useGuest();
+  const qw = useQuickWallet();
   const hydrated = useHydrated();
   return useMemo(() => {
-    const raw = {
-      ...queryToQuick(new URLSearchParams(sp.toString())),
-      wallet: walletForRequest(guest.wallet),
-    };
+    const raw = { ...queryToQuick(new URLSearchParams(sp.toString())), wallet: qw.wallet };
     const parsed = QuickSearchRequestSchema.safeParse(raw);
     return {
       hydrated,
@@ -28,9 +26,10 @@ export function useQuickRequest() {
         ? []
         : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
       query: sp.toString(),
-      walletProfile: guest.wallet.profile,
+      walletLabel: qw.label,
+      walletIsExample: qw.isExample,
     };
-  }, [sp, guest, hydrated]);
+  }, [sp, qw, hydrated]);
 }
 
 export function useQuickResult() {

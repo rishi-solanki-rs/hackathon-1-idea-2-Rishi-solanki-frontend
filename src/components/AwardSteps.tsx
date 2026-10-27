@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { ExternalLink, Lock } from 'lucide-react';
 import { buildAwardPlan, type AwardStep } from '@/domain/awardSteps';
 import { TRANSFER_ROUTES, programById, verificationLabel } from '@/fixtures/catalogue';
-import { useGuest } from '@/lib/guestStore';
+import { useQuickWallet } from '@/lib/quickWallet';
 import { Alert, Badge, ButtonLink, Card } from './ui';
 import { eur, programName, pts } from './format';
 import { OptionPage } from './results/OptionPage';
 import { Itinerary } from './results/OptionSummary';
 
 export function AwardStepsView() {
-  const guest = useGuest();
+  const { wallet } = useQuickWallet();
   const [seatConfirmed, setSeatConfirmed] = useState(false);
   return (
     <OptionPage>
@@ -31,7 +31,11 @@ export function AwardStepsView() {
           program: p.program,
           pointsNeeded: p.amount,
           taxesMinor: o.cashToday.minor,
-          balances: guest.wallet.balances.map((b) => ({ ...b, asOf: '', source: 'DEMO' as const })),
+          balances: wallet.balances.map((b) => ({
+            ...b,
+            asOf: '',
+            source: 'USER_ENTERED' as const,
+          })),
           routes: TRANSFER_ROUTES,
         });
         return (
@@ -56,8 +60,8 @@ export function AwardStepsView() {
                 kind="warn"
                 title="Not enough points for this award"
                 action={
-                  <ButtonLink href="/wallet" variant="secondary">
-                    Update your wallet
+                  <ButtonLink href="/plan" variant="secondary">
+                    Update your points
                   </ButtonLink>
                 }
               >

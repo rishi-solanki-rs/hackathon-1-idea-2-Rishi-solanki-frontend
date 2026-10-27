@@ -49,7 +49,7 @@ function PlanBuilderInner() {
       document.getElementById(`plan-${Object.keys(errs)[0].replaceAll('.', '-')}`)?.focus();
       return;
     }
-    router.push(`/plan/results?${planToQuery(p)}`);
+    router.push(`/trips/multi/results?${planToQuery(p)}`);
   }
 
   return (

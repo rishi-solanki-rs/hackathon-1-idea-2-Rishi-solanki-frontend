@@ -11,36 +11,40 @@ import {
 
 const pages: { name: string; path: () => string; ready: RegExp | string }[] = [
   { name: 'landing', path: () => '/', ready: 'Same trip. Much less money.' },
+  { name: 'plan-wizard', path: () => '/plan', ready: '1. Your trip' },
   { name: 'results', path: scl, ready: /Save €1,674/ },
   { name: 'results-flex', path: pek, ready: /Save €78/ },
   { name: 'detail', path: () => `${scl()}`, ready: /Save €1,674/ },
-  { name: 'plan', path: () => '/plan', ready: 'Plan a trip with several flights' },
-  { name: 'plan-results', path: trip, ready: 'Tickets to book' },
-  { name: 'wallet', path: () => '/wallet', ready: 'Your points, kept separate' },
+  { name: 'multi', path: () => '/trips/multi', ready: 'Plan a trip with several flights' },
+  { name: 'multi-results', path: trip, ready: 'Tickets to book' },
   { name: 'how', path: () => '/how-it-works', ready: 'How we calculate and rank' },
   { name: 'settings', path: () => '/settings', ready: 'Your data stays in this browser' },
   { name: 'not-found', path: () => '/nope', ready: 'This page took a different flight' },
 ];
 
-for (const p of pages) {
-  test(`a11y + layout: ${p.name}`, async ({ page }, info) => {
-    await seedWallet(page, LUCIA);
-    await page.goto(p.path());
-    if (p.name === 'detail') {
-      await expect(page.getByRole('heading', { level: 2, name: p.ready })).toBeVisible();
-      await page.getByRole('link', { name: 'See how this was calculated' }).click();
-      await expect(page.getByRole('table', { name: 'Cost breakdown' })).toBeVisible();
-    } else {
-      await expect(page.getByRole('heading', { name: p.ready }).first()).toBeVisible();
-    }
-    await page.waitForLoadState('networkidle');
-    await expectNoHorizontalOverflow(page);
-    await expectAccessible(page);
-    await page.screenshot({
-      path: `test-results/screens/${info.project.name}-${p.name}.png`,
-      fullPage: true,
+for (const theme of ['light', 'dark'] as const) {
+  for (const p of pages) {
+    test(`a11y + layout (${theme}): ${p.name}`, async ({ page }, info) => {
+      await seedWallet(page, LUCIA);
+      await page.addInitScript((t) => window.localStorage.setItem('aumTheme', t), theme);
+      await page.goto(p.path());
+      if (theme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/);
+      if (p.name === 'detail') {
+        await expect(page.getByRole('heading', { level: 2, name: p.ready })).toBeVisible();
+        await page.getByRole('link', { name: 'See how this was calculated' }).click();
+        await expect(page.getByRole('table', { name: 'Cost breakdown' })).toBeVisible();
+      } else {
+        await expect(page.getByRole('heading', { name: p.ready }).first()).toBeVisible();
+      }
+      await page.waitForLoadState('networkidle');
+      await expectNoHorizontalOverflow(page);
+      await expectAccessible(page);
+      await page.screenshot({
+        path: `test-results/screens/${info.project.name}-${theme}-${p.name}.png`,
+        fullPage: true,
+      });
     });
-  });
+  }
 }
 
 test('award steps and checkout pass axe', async ({ page }, info) => {
@@ -66,7 +70,7 @@ test('award steps and checkout pass axe', async ({ page }, info) => {
   });
 });
 
-test('keyboard: skip link and visible focus reach the search form', async ({ page }) => {
+test('keyboard: skip link and visible focus reach the content', async ({ page }) => {
   await page.goto('/');
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();

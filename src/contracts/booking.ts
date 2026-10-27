@@ -38,7 +38,7 @@ export const TestOrderRequestSchema = z.object({
 });
 export type TestOrderRequest = z.infer<typeof TestOrderRequestSchema>;
 
-export const TEST_BOOKING_LABEL = 'TEST BOOKING – no ticket issued, no money charged';
+export const TEST_BOOKING_LABEL = 'TEST — no real ticket issued; no money charged';
 
 export const TestOrderResponseSchema = z.object({
   ok: z.literal(true),

@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { Menu, Plane } from 'lucide-react';
 import { t } from '@/i18n/en';
+import { ThemeToggle } from './ThemeToggle';
 
 const links = [
-  { href: '/', label: t.nav.quick },
   { href: '/plan', label: t.nav.plan },
-  { href: '/wallet', label: t.nav.wallet },
+  { href: '/', label: t.nav.quick },
+  { href: '/trips/multi', label: t.nav.multi },
   { href: '/how-it-works', label: t.nav.how },
   { href: '/settings', label: t.nav.settings },
 ];
@@ -13,11 +14,11 @@ const links = [
 function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2 rounded-lg" aria-label="A Una Milla, home">
-      <span className="grid size-9 place-items-center rounded-full bg-terracotta text-white">
+      <span className="grid size-9 place-items-center rounded-full bg-[#a23d18] text-white">
         <Plane aria-hidden className="size-5 -rotate-45" />
       </span>
       <span className="font-display text-xl text-ink">
-        A Una <span className="text-sea">Milla</span>
+        A Una <span className="text-sea-dark dark:text-sea-dark">Milla</span>
       </span>
     </Link>
   );
@@ -26,41 +27,48 @@ function Logo() {
 export function SiteHeader() {
   return (
     <header className="border-b border-line bg-ivory/95">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
         <Logo />
-        <nav aria-label="Main" className="hidden md:block">
-          <ul className="flex items-center gap-1 text-sm font-medium">
-            {links.map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="rounded-full px-3 py-2 text-ink-soft hover:bg-sand hover:text-ink"
-                >
-                  {l.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <details className="relative md:hidden">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-            <Menu aria-hidden className="size-4" /> Menu
-          </summary>
-          <nav
-            aria-label="Main"
-            className="absolute right-0 z-20 mt-2 w-56 rounded-2xl border border-line bg-white p-2 shadow-[var(--shadow-card)]"
-          >
-            <ul className="flex flex-col text-sm font-medium">
-              {links.map((l) => (
+        <div className="flex items-center gap-2">
+          <nav aria-label="Main" className="hidden md:block">
+            <ul className="flex items-center gap-1 text-sm font-medium">
+              {links.map((l, i) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="block rounded-xl px-3 py-2.5 hover:bg-sand">
+                  <Link
+                    href={l.href}
+                    className={
+                      i === 0
+                        ? 'rounded-full bg-sea px-3 py-2 font-semibold text-white hover:bg-sea-dark dark:hover:bg-sea'
+                        : 'rounded-full px-3 py-2 text-ink-soft hover:bg-sand hover:text-ink'
+                    }
+                  >
                     {l.label}
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
-        </details>
+          <ThemeToggle />
+          <details className="relative md:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+              <Menu aria-hidden className="size-4" /> Menu
+            </summary>
+            <nav
+              aria-label="Main"
+              className="absolute right-0 z-20 mt-2 w-56 rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow-card)]"
+            >
+              <ul className="flex flex-col text-sm font-medium">
+                {links.map((l) => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="block rounded-xl px-3 py-2.5 hover:bg-sand">
+                      {l.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </details>
+        </div>
       </div>
     </header>
   );

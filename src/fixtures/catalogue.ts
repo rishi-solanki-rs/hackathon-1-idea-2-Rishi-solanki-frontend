@@ -365,8 +365,10 @@ export const TRANSFER_ROUTES: TransferRoute[] = [
     preconditions: [
       'Your Iberia Club account is in the same name as your Amex card account',
       'Your Amex card is issued in Spain (ratios differ by country)',
+      'Ratio 1:1 is implied by the official Gold card page (20,000 MR = 20,000 Avios); minimum and steps are not confirmed',
+      'No transfer fee per the official Membership Rewards terms (checked 27 Oct 2026)',
     ],
-    sourceUrl: 'https://www.americanexpress.com/es-es/',
+    sourceUrl: 'https://www.americanexpress.com/es-es/rewards/membership-rewards/terms',
     checkedAt: undefined,
   },
   {

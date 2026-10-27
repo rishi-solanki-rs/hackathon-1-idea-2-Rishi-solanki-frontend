@@ -8,7 +8,20 @@ if (!existsSync(root)) {
   process.exit(1);
 }
 
-const banned = [/duffel_(test|live)_[A-Za-z0-9]/, /DUFFEL_ACCESS_TOKEN/, /sb_secret_/];
+const banned = [
+  /duffel_(test|live)_[A-Za-z0-9]/,
+  /DUFFEL_ACCESS_TOKEN/,
+  /GEMINI_API_KEY/,
+  /AQ\.[A-Za-z0-9_-]{40,}/,
+  /AIza[0-9A-Za-z_-]{30,}/,
+  /sb_secret_[A-Za-z0-9_-]{16,}/,
+  /SUPABASE_DB_PASSWORD/,
+];
+// Also fail if any server-only value from the local env file ended up in the client bundle.
+for (const k of ['DUFFEL_ACCESS_TOKEN', 'GEMINI_API_KEY', 'SUPABASE_DB_PASSWORD']) {
+  const v = process.env[k];
+  if (v && v.length >= 8) banned.push(new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+}
 const findings = [];
 let count = 0;
 

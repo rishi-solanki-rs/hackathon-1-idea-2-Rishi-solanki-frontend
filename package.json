@@ -20,11 +20,15 @@
     "test:smoke": "playwright test --project=smoke",
     "check:secrets": "node scripts/check-secrets.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
+    "check:bundle:local": "node --env-file=.env.local scripts/check-bundle.mjs",
     "check:env-files": "node scripts/check-env-files.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets && pnpm check:env-files"
+    "check:encoding": "node scripts/check-encoding.mjs",
+    "test:live": "node --env-file=.env.local node_modules/vitest/vitest.mjs run --config vitest.live.config.mts --silent=false",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm check:secrets && pnpm check:env-files && pnpm check:encoding"
   },
   "dependencies": {
     "@date-fns/tz": "1.5.0",
+    "@supabase/supabase-js": "2.118.0",
     "clsx": "2.1.1",
     "date-fns": "4.4.0",
     "decimal.js": "10.6.0",

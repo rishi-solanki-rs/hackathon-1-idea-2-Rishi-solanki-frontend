@@ -9,6 +9,8 @@ const patterns = [
   ['AWS access key', /AKIA[0-9A-Z]{16}/],
   ['OpenAI-style key', /sk-[A-Za-z0-9]{32,}/],
   ['JWT', /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/],
+  ['Google API key', /AIza[0-9A-Za-z_-]{30,}|AQ\.[A-Za-z0-9_-]{40,}/],
+  ['Postgres URL with password', /postgres(ql)?:\/\/[^:\s]+:[^@\s]{6,}@/],
   ['Private key', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
 ];
 

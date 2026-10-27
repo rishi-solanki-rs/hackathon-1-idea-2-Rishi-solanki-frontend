@@ -14,7 +14,7 @@ test('T-INT-004: test checkout reprices €702 → €719, then books with an un
   await expect(page.getByText('Price changed from €702.00 to €719.00')).toBeVisible();
   await page.getByRole('button', { name: /Accept €719\.00 and book \(test\)/ }).click();
   await expect(page.getByRole('heading', { name: 'Test booking created' })).toBeVisible();
-  await expect(page.getByText('TEST BOOKING – no ticket issued, no money charged')).toBeVisible();
+  await expect(page.getByText('TEST — no real ticket issued; no money charged')).toBeVisible();
   await expect(page.getByText(/^SIM-/)).toBeVisible();
 });
 

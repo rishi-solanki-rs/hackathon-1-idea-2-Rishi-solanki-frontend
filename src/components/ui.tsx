@@ -6,9 +6,9 @@ import { cn } from '@/lib/cn';
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const variants: Record<Variant, string> = {
   primary: 'bg-sea text-white hover:bg-sea-dark shadow-sm',
-  secondary: 'bg-white text-ink border border-line hover:border-sea hover:text-sea-dark',
+  secondary: 'bg-surface text-ink border border-line hover:border-sea hover:text-sea-dark',
   ghost: 'text-sea-dark hover:bg-sea-soft',
-  danger: 'bg-white text-danger border border-danger/40 hover:bg-danger-soft',
+  danger: 'bg-surface text-danger border border-danger/40 hover:bg-danger-soft',
 };
 const base =
   'inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 min-h-11';
@@ -33,7 +33,7 @@ export function Card({ className, ...p }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-card)] border border-line bg-white shadow-[var(--shadow-card)]',
+        'rounded-[var(--radius-card)] border border-line bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
       {...p}
@@ -153,7 +153,7 @@ export function SectionTitle({
 }
 
 export const fieldClass =
-  'mt-1 block w-full min-w-0 max-w-full min-h-11 rounded-xl border border-line bg-white px-3 py-2 text-base text-ink shadow-sm placeholder:text-ink-muted focus:border-sea aria-[invalid=true]:border-danger';
+  'mt-1 block w-full min-w-0 max-w-full min-h-11 rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink shadow-sm placeholder:text-ink-muted focus:border-sea aria-[invalid=true]:border-danger';
 
 export function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;

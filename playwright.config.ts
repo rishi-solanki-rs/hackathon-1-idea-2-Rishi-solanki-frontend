@@ -50,11 +50,14 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
         // Every parallel test shares one IP, so the e2e server gets a higher per-minute limit.
+        // Deterministic: no live providers even if .env.local exists (process env wins over .env files).
         env: {
           PROVIDER_MODE: 'fixture',
           AUTH_MODE: 'guest',
           FX_LIVE: 'off',
           RATE_LIMIT_PER_MIN: '2000',
+          DUFFEL_ACCESS_TOKEN: '',
+          GEMINI_API_KEY: '',
         },
       },
 });

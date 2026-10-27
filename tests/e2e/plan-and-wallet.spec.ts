@@ -1,14 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { STORE, expectNoHorizontalOverflow, trip } from './helpers';
 
-test('T-FUN-002: CS-05 full trip → open-jaw cash €970, per-leg awards rejected with a reason', async ({
+test('T-FUN-002: CS-05 multi-city example → open-jaw cash €970, per-leg awards rejected with a reason', async ({
   page,
 }) => {
   await page.goto('/');
   await page
-    .getByRole('button', { name: /Full trip: Madrid → Beijing → Shanghai → Madrid/ })
+    .getByRole('link', { name: /Multi-city: Madrid → Beijing → Shanghai → Madrid/ })
     .click();
-  await expect(page).toHaveURL(/\/plan\/results\?/);
+  await expect(page).toHaveURL(/\/trips\/multi\/results\?/);
   await expect(
     page.getByRole('heading', { level: 2, name: 'No saving vs paying cash' }),
   ).toBeVisible();
@@ -20,11 +20,13 @@ test('T-FUN-002: CS-05 full trip → open-jaw cash €970, per-leg awards reject
       .getByText(/rejected.*Needs 50,000 Avios; you have 30,000/),
   ).toBeVisible();
   await expect(page.getByText('€60 more overall')).toBeVisible();
+  // The example wallet is used for this search only; the user's own data is untouched.
+  expect(await page.evaluate((k) => window.localStorage.getItem(k), STORE)).toBeNull();
   await expectNoHorizontalOverflow(page);
 });
 
-test('plan builder validates, adds flights and searches', async ({ page }) => {
-  await page.goto('/plan');
+test('multi-city builder validates, adds flights and searches', async ({ page }) => {
+  await page.goto('/trips/multi');
   const form = page.getByRole('form', { name: 'Full Trip Plan' });
   await form.getByRole('button', { name: 'Plan my trip' }).click();
   const to1 = form.getByRole('combobox', { name: 'To', exact: true }).first();
@@ -36,7 +38,7 @@ test('plan builder validates, adds flights and searches', async ({ page }) => {
   await expect(form.getByRole('heading', { name: 'Flight 3' })).toBeVisible();
   await form.getByRole('button', { name: 'Remove flight 3' }).click();
   await form.getByRole('button', { name: 'Plan my trip' }).click();
-  await expect(page).toHaveURL(/\/plan\/results\?legs=MAD-LIS/);
+  await expect(page).toHaveURL(/\/trips\/multi\/results\?legs=MAD-LIS/);
   await expect(page.getByRole('region', { name: 'Every flight, every option' })).toBeVisible();
 });
 
@@ -54,22 +56,8 @@ test('approximate search notice is shown when the limit is hit', async ({ page }
   ).toBeVisible();
 });
 
-test('wallet keeps programmes separate and clear demo data removes everything', async ({
-  page,
-}) => {
+test('the old wallet address goes to Plan my trip', async ({ page }) => {
   await page.goto('/wallet');
-  await page.getByRole('button', { name: /Lucía \(demo\)/ }).click();
-  await expect(page.getByLabel('Balance (Avios)').first()).toHaveValue('120000');
-  await expect(page.getByLabel('Balance (MR points)')).toHaveValue('15000');
-  await expect(page.getByText(/total points/i)).toHaveCount(0);
-  await page.getByLabel('Balance (MR points)').fill('20000');
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Saved in this browser.' }),
-  ).toBeVisible();
-  expect(await page.evaluate((k) => window.localStorage.getItem(k), STORE)).toContain('20000');
-
-  await page.getByRole('button', { name: 'Clear demo data' }).first().click();
-  await expect(page.getByText('Demo data cleared from this browser.')).toBeVisible();
-  expect(await page.evaluate((k) => window.localStorage.getItem(k), STORE)).toBeNull();
-  await expect(page.getByLabel('Balance (MR points)')).toHaveValue('0');
+  await expect(page).toHaveURL(/\/plan$/);
+  await expect(page.getByRole('heading', { name: '1. Your trip' })).toBeVisible();
 });

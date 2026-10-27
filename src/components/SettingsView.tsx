@@ -2,23 +2,26 @@
 
 import { useState } from 'react';
 import { Download, Trash2 } from 'lucide-react';
-import { clearDemoData, STORE_KEY, useGuest, useHydrated } from '@/lib/guestStore';
+import { clearDemoData, useHydrated } from '@/lib/guestStore';
+import { PLAN_KEY, resetPlanCache, usePlanDraft } from '@/lib/planStore';
+import { useSync } from '@/lib/sync';
 import { Button, Card, Skeleton } from './ui';
 
 export function SettingsView() {
   const hydrated = useHydrated();
-  const guest = useGuest();
+  const d = usePlanDraft();
+  const sync = useSync();
   const [msg, setMsg] = useState('');
   if (!hydrated) return <Skeleton className="h-48" />;
 
   function exportData() {
-    const blob = new Blob([JSON.stringify({ [STORE_KEY]: guest }, null, 2)], {
+    const blob = new Blob([JSON.stringify({ [PLAN_KEY]: d }, null, 2)], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'a-una-milla-demo-data.json';
+    a.download = 'a-una-milla-my-data.json';
     a.click();
     URL.revokeObjectURL(url);
     setMsg('Your data was downloaded as a JSON file.');
@@ -30,21 +33,20 @@ export function SettingsView() {
         <h2 className="font-display text-xl">What is stored, and where</h2>
         <ul className="mt-3 grid list-disc gap-1 pl-5 text-sm text-ink-soft">
           <li>
-            Your wallet (points balances and values) and your ranking preference, in this browser’s
-            local storage.
+            Your trip, cards (names and earn terms only), points balances and planned spending, in
+            this browser.
           </li>
+          <li>{sync.statusText}</li>
           <li>Recent search results for up to 10 minutes, in this tab’s session storage.</li>
-          <li>
-            Nothing is sent to a database in this demo. Searches send your balances to our server
-            only to compute the comparison; they are not saved.
-          </li>
+          <li>We never store card numbers, CVV, PINs, passwords or passport data.</li>
         </ul>
         <p className="mt-3 text-sm text-ink-soft">
-          Current wallet:{' '}
+          Saved now: <strong className="text-ink">{d.profile.cards.length}</strong> card(s),{' '}
+          <strong className="text-ink">{d.profile.balances.length}</strong> points balance(s),{' '}
           <strong className="text-ink">
-            {guest.wallet.balances.length} programme{guest.wallet.balances.length === 1 ? '' : 's'}
+            {d.profile.monthly.length + d.profile.purchases.length}
           </strong>{' '}
-          with points.
+          spending item(s).
         </p>
       </Card>
       <div className="flex flex-wrap gap-3">
@@ -53,12 +55,17 @@ export function SettingsView() {
         </Button>
         <Button
           variant="danger"
-          onClick={() => {
+          onClick={async () => {
+            await sync.deleteRemote();
             clearDemoData();
-            setMsg('All A Una Milla data was removed from this browser.');
+            resetPlanCache();
+            setMsg(
+              'All A Una Milla data was removed from this browser' +
+                (sync.enabled ? ' and from your private account.' : '.'),
+            );
           }}
         >
-          <Trash2 aria-hidden className="size-4" /> Clear demo data
+          <Trash2 aria-hidden className="size-4" /> Clear my data
         </Button>
       </div>
       <p role="status" aria-live="polite" className="text-sm font-medium text-saving">

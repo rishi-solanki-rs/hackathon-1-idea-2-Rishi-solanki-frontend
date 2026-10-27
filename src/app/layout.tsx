@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Fraunces, Inter } from 'next/font/google';
 import { DemoBanner } from '@/components/DemoBanner';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
+import { themeBootScript } from '@/components/ThemeToggle';
 import './globals.css';
 
 const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-fraunces', display: 'swap' });
@@ -18,7 +19,10 @@ export const viewport: Viewport = { themeColor: '#fbf7f0', width: 'device-width'
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${inter.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body className="flex min-h-dvh flex-col">
         <a
           href="#main"

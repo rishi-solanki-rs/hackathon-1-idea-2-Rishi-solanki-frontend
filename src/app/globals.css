@@ -1,6 +1,9 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
+  --color-surface: #ffffff;
   --color-ivory: #fbf7f0;
   --color-sand: #f3ebdd;
   --color-sand-deep: #e9dcc6;
@@ -32,6 +35,34 @@
 
 html {
   color-scheme: light;
+}
+
+/* Dark theme: night over the Mediterranean. Same token names, so every component follows. */
+.dark {
+  color-scheme: dark;
+  --color-surface: #141e2b;
+  --color-ivory: #0e1622;
+  --color-sand: #182434;
+  --color-sand-deep: #223146;
+  --color-line: #2c3c53;
+  --color-ink: #eef2f7;
+  --color-ink-soft: #c3ccd8;
+  --color-ink-muted: #a1acbb;
+  --color-sea: #2f74c2;
+  --color-sea-dark: #9cc8ff;
+  --color-sea-soft: #1a2c44;
+  --color-terracotta: #f09a76;
+  --color-terracotta-soft: #3a2018;
+  --color-olive: #b8c784;
+  --color-gold: #ecc977;
+  --color-gold-soft: #2f2711;
+  --color-saving: #5fd39b;
+  --color-saving-soft: #11301f;
+  --color-warn: #f4bd6b;
+  --color-warn-soft: #33260f;
+  --color-danger: #ff9b91;
+  --color-danger-soft: #3b1815;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -8px rgb(0 0 0 / 0.6);
 }
 
 body {

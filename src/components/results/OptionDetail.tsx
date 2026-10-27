@@ -1,7 +1,7 @@
 'use client';
 
 import { REFERENCE_EUR_PER_POINT } from '@/fixtures/catalogue';
-import { useGuest } from '@/lib/guestStore';
+import { useQuickWallet } from '@/lib/quickWallet';
 import { AvailabilityBadge, ProvenanceBadge } from '../Badges';
 import { Alert, Badge, ButtonLink, Card } from '../ui';
 import { eur, programName } from '../format';
@@ -17,18 +17,16 @@ const cond = {
 } as const;
 
 export function OptionDetail() {
-  const guest = useGuest();
+  const { wallet } = useQuickWallet();
   return (
     <OptionPage>
       {({ o, res, query }) => {
         const c = res.data.comparison;
         const normal = res.data.options.find((x) => x.id === c.normalId);
         const program = o.points[0]?.program;
-        const userV = program
-          ? guest.wallet.valuations.find((v) => v.program === program)
-          : undefined;
+        const userV = program ? wallet.valuations.find((v) => v.program === program) : undefined;
         const valuation =
-          !program || guest.wallet.noValuePrograms.includes(program)
+          !program || (wallet.noValuePrograms ?? []).includes(program)
             ? null
             : userV
               ? { eurPerPoint: userV.eurPerPoint, method: 'user' as const }

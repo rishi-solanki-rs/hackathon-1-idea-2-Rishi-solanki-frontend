@@ -4,13 +4,17 @@ import { LUCIA, expectNoHorizontalOverflow, jfk, pek, scl, seedWallet } from './
 test.describe('Quick Flight journey (TASK-015..017)', () => {
   test('T-FUN-003: demo trip → results → detail → reload keeps the detail', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: /Madrid → Santiago de Chile, business/ }).click();
+    await page.getByRole('link', { name: /Madrid → Santiago de Chile, business/ }).click();
     await expect(page).toHaveURL(/\/results\?/);
     const hero = page.getByRole('heading', { level: 2, name: /Save €1,674 \(57\.7%\)/ });
     await expect(hero).toBeVisible();
     await expect(page.getByText('Example saving · illustrative data')).toBeVisible();
     await expect(page.getByText('Illustrative award').first()).toBeVisible();
-    await expect(page.getByText(/Points used for this comparison: Lucía \(demo\)/)).toBeVisible();
+    await expect(
+      page.getByText(
+        /Points used for this comparison: Example wallet: Lucía \(demo\) \(fictional\)/,
+      ),
+    ).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole('link', { name: 'See how this was calculated' }).click();

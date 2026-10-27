@@ -1,5 +1,27 @@
 # Implementation evidence (A Una Milla)
 
+## Round 2 verification — 27 Oct 2026 ~12:50 IST (real providers, values never printed)
+
+**Credentials:** `frontend/.env.local` (gitignored, confirmed with `git check-ignore`). `scripts/live/check-connections.mjs` reports lengths only.
+
+**Connection results**
+
+| Integration | Result |
+|---|---|
+| Duffel test | `POST /air/offer_requests` MAD→LHR → HTTP 201, `live_mode=false`, 91 offers (sandbox data from several airlines + Duffel Airways), EUR |
+| Gemini | Gemini API key, valid (`GET /v1beta/models` → 200). `gemini-2.5-*` → 404 "no longer available to new users". **`gemini-3.5-flash-lite` → 200 "ok" (3.3 s)**, `gemini-3.5-flash` → 200, `gemini-3.8-flash` → 503 (high demand). Vertex endpoint → 403 (API not enabled; not needed). |
+| Supabase project `qcvlnffgqjddvadzbppd` (ap-southeast-2) | Auth health 200. Settings: `anonymous_users=false`, email on, autoconfirm off. REST `airports` → PGRST205 (no tables). |
+| Supabase DB | Reachable via the `aws-0-ap-southeast-2` session pooler. `migration list`: 0 of 3 applied remotely. `db dump --schema public` contains only Supabase's `rls_auto_enable` event-trigger function: no user tables, no data. |
+
+**Gap map before round 2 (the main flow was missing)**
+- No screen collects the user's cards, spending or planned purchases.
+- The wallet defaults to fictional presets.
+- Results come from fixtures; Duffel is not wired in the UI.
+- No card allocation, verdict, action list or re-plan.
+- No AI explanation.
+- No database persistence.
+- Flexible dates are limited to ±3 days.
+
 Only what is recorded here counts as done. Every entry lists the real commands and results. Environment: Windows 10 (26300), Node 24.11.0, pnpm 10.32.1, Playwright Chromium. Times are IST.
 
 ## Baseline — 27 Oct 2026 10:32

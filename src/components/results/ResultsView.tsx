@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { ArrowDown, ChevronRight, Pencil, RefreshCw, Sparkles, Wallet } from 'lucide-react';
 import type { OptionDto, QuickSearchResponse } from '@/contracts/search';
 import { t } from '@/i18n/en';
-import { PRESETS } from '@/lib/guestStore';
 import { queryToQuick, type QuickParams } from '@/lib/query';
 import { useQuickResult } from '@/lib/useQuickResult';
 import { AvailabilityBadge, ProvenanceBadge } from '../Badges';
@@ -22,7 +21,8 @@ const reasonText: Record<NonNullable<OptionDto['excludedReason']>, string> = {
 };
 
 export function ResultsView() {
-  const { request, issues, query, state, retry, hydrated, walletProfile } = useQuickResult();
+  const { request, issues, query, state, retry, hydrated, walletLabel, walletIsExample } =
+    useQuickResult();
   const [editing, setEditing] = useState(false);
 
   if (!hydrated) return <ResultsSkeleton />;
@@ -82,7 +82,7 @@ export function ResultsView() {
           <QuickSearchForm initial={params} />
         </Card>
       ) : null}
-      <WalletStrip profile={walletProfile} />
+      <WalletStrip label={walletLabel} isExample={walletIsExample} />
       {state.kind === 'loading' || state.kind === 'idle' ? (
         <ResultsSkeleton label="Comparing cash and points…" />
       ) : null}
@@ -110,19 +110,19 @@ export function ResultsView() {
   );
 }
 
-function WalletStrip({ profile }: { profile: string }) {
-  const preset = PRESETS[profile];
+function WalletStrip({ label, isExample }: { label: string; isExample: boolean }) {
   return (
     <p className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
       <Wallet aria-hidden className="size-4 text-sea" />
-      Points used for this comparison:{' '}
-      <strong className="text-ink">{preset ? preset.label : 'Your wallet'}</strong>
-      <Link
-        href="/wallet"
-        className="font-semibold text-sea-dark underline-offset-4 hover:underline"
-      >
-        Change wallet
-      </Link>
+      Points used for this comparison: <strong className="text-ink">{label}</strong>
+      {isExample ? null : (
+        <Link
+          href="/plan"
+          className="font-semibold text-sea-dark underline-offset-4 hover:underline"
+        >
+          Edit my points
+        </Link>
+      )}
     </p>
   );
 }

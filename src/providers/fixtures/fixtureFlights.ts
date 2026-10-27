@@ -140,7 +140,7 @@ export function illustrativeAwardPoints(from: string, to: string, cabin: Cabin):
   return Math.round((band * factor) / 500) * 500;
 }
 
-function illustrativeAwardTaxesEur(from: string, to: string, cabin: Cabin): number {
+export function illustrativeAwardTaxesEur(from: string, to: string, cabin: Cabin): number {
   const km = distanceKm(from, to);
   const base = km < 2000 ? 25 : km < 6500 ? 95 : 160;
   return Math.round(base * (cabin === 'business' || cabin === 'first' ? 1.4 : 1));
