@@ -156,14 +156,28 @@ Results of the read-only check run on 26 Oct 2026 are recorded in section 8.1 be
 
 The first run also corrected a wrong label in doc 11 ("REC (30)" → 29; the total of 87 was already correct). **This gate checks documentation consistency only. No software has been built or tested.**
 
-## 9. Exact next action
+## 9. Build status (27 Oct 2026, evidence in `docs/implementation/EVIDENCE.md`)
 
-1. **Owner:** review this master plan and doc 11, then approve or adjust the §6 decisions (especially D-29, D-31, D-32, D-33) and GATE-00.
-2. **After approval, the first implementation task is TASK-000:**
-   - clone the two empty GitHub repos into `frontend/` and `backend/`;
-   - add `.gitignore`, `.env.example` (names only) and a README;
-   - copy `docs/` into `frontend/docs`;
-   - make a baseline commit;
-   - run a gitleaks scan;
-   - **push only after the owner confirms**.
-3. Then TASK-001 (config) and TASK-002 (compatibility spike + Vercel skeleton on the owner's account).
+| Tier / task | Status | Evidence |
+|---|---|---|
+| TASK-000..002 baseline, toolchain, compatibility spike | Done | ESLint 9.39.5 (template pin), TS 5.9.3; `pnpm verify` green |
+| TASK-010..014 engine, fixtures, providers | Done | 68 Vitest tests (unit + MSW integration) |
+| TASK-015..017 Quick Flight API, results, detail | Done | Playwright on 3 viewports |
+| TASK-018 Full Trip Plan | Done | CS-05 e2e + bounded-search unit tests |
+| TASK-019..021 guest wallet, award steps, how it works | Done | e2e + axe |
+| TASK-030 test checkout (simulated / Duffel test) | Done for simulated; Duffel verified only via MSW | Integration + e2e |
+| Backend DB (catalogue, user tables, RLS, RPC) | Done locally | 41 pgTAP tests, `db lint` clean |
+| TASK-003 auth spike / `AUTH_MODE=supabase` | Not started | Guest mode only (D-29) |
+| Plan-ahead, card allocation, verdict, replanning (Tier B) | Not started | Engine spec in doc 05 / doc 12 §B.8 |
+| TASK-022 / TASK-043 deploy + smoke on a URL | **Blocked** | Push needs `gh auth login`; Vercel deploy needs the Git link or `vercel login` |
+
+## 10. Exact next actions
+
+1. **Owner:** run `gh auth login` (or tell me which credential to use), so I can push both repos.
+2. **Then (agent):**
+   - push `main` for both repos;
+   - create a dedicated Vercel project (Hobby, non-commercial) linked to the frontend repo, with `AUTH_MODE=guest` and `PROVIDER_MODE=fixture`;
+   - deploy a **preview** (protected by default; nothing in production);
+   - run `BASE_URL=<preview> pnpm test:smoke`.
+3. **Owner decision D-33:** whether the jury URL may be a public production domain of the demo project.
+4. **Optional:** add a `duffel_test_` token in the Vercel env to show Duffel sandbox fares.

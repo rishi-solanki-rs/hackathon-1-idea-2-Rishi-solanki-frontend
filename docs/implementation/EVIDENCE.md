@@ -87,9 +87,56 @@ The template enables `cacheComponents` and `partialPrefetching`. Pages that use 
 - **Mobile 360:** results (CS-01), hero, option cards, in the IDE browser with device emulation.
 - **Fixes from the review:** the hero repeated the headline sentence; mixed €780 / €702.00 formats; plan tables had cramped columns.
 
-## Not done or not verified (as of this entry)
+## Backend (Phase 8) — 27 Oct 2026 ~12:10
 
-- **Backend:** no migrations run yet. Docker was just started.
-- **Duffel:** never called for real; no test token is configured. All Duffel behaviour is verified with MSW only.
-- **Deployment and Git:** no deployment; no push (`gh` not authenticated). gitleaks has not run yet; it needs Docker. The fallback `pnpm check:secrets` passed.
-- **Real-world rules:** card, transfer and award rules are UNVERIFIED or ILLUSTRATIVE and labelled as such in the UI.
+Repo `backend/`, Supabase CLI 2.122.0 (pinned dev dependency), local Docker image `supabase/postgres:17.11.0.006`.
+
+**Commands**
+
+| Command | Result |
+|---|---|
+| `pnpm exec supabase db reset --local` | Applied `20261027120000_catalogue.sql`, `20261027120100_user_data.sql`, `20261027120200_guest_migration_rpc.sql` and `seed.sql` |
+| `pnpm exec supabase test db --local` | **Files=3, Tests=41, Result: PASS** |
+| `pnpm exec supabase db lint --local --level warning` | "No schema errors found" |
+| gitleaks (Docker) on the backend history | 2 commits, no leaks |
+
+**What the 41 pgTAP tests prove**
+- **RLS and policies:** RLS is enabled and at least one policy exists on every public table.
+- **Grants:**
+  - `anon` can only read the catalogue.
+  - Users cannot change the catalogue.
+  - Test bookings cannot be updated or deleted.
+  - Only signed-in users can execute the guest-migration RPC.
+- **Row isolation:** user B cannot read, update or delete user A's trips, legs or balances.
+- **Cross-user blocks:**
+  - B cannot create a row owned by A (RLS, 42501).
+  - B cannot attach a leg to A's trip (composite FK, 23503).
+  - `anon` gets "permission denied".
+- **Test bookings:** a duplicate idempotency key is rejected (23505), and only SIMULATED or DUFFEL_TEST modes are accepted.
+- **Guest migration:** `migrate_guest_data` runs exactly once per migration ID, does not overwrite on repeat, rejects malformed payloads and requires a signed-in user.
+- **Catalogue honesty:** a transfer rule cannot be VERIFIED without a source and a check date. The seed contains no VERIFIED rules.
+
+**Not done:** the hosted Supabase project (owner action), the auth runtime spike (TASK-003) and the frontend `AUTH_MODE=supabase` wiring. Guest mode is the only mode the app offers.
+
+## Hardening — 27 Oct ~12:20
+
+`next.config.ts` now sets `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` and HSTS, and turns off `poweredByHeader` and browser source maps. `pnpm test:smoke` (local) → **4 passed**, including the headers check.
+
+**Regression after hardening**
+
+| Command | Result |
+|---|---|
+| `pnpm verify` | 68/68 tests; secret scan 125 files, 0 findings |
+| `pnpm check:bundle` | Passed |
+| Playwright on 3 viewports | **84 passed (1.7 min)** |
+
+## Release status and blockers (27 Oct ~12:25)
+
+| Item | Status |
+|---|---|
+| Frontend commits | 7 on `main` (local only) |
+| Backend commits | 2 on `main` (local only) |
+| Push to GitHub | **Blocked.** `gh auth status` says not logged in, and no Git credential helper is configured. The owner must run `gh auth login` (or configure a credential). |
+| Vercel | The MCP connector is authenticated to the owner's **Hobby** account. No project or deployment has been created. MCP file-upload deployment is impractical for this source size, so the route is Git (after the push) or `vercel login` + CLI. The plan is a **preview** deployment (protected by Vercel Authentication; nothing in production) until the owner approves D-33. |
+| Duffel test mode | Code complete and MSW-tested. Needs an owner-supplied `duffel_test_` token in Vercel env; never called for real. |
+| Real-world rules | Card, transfer and award rules are UNVERIFIED or ILLUSTRATIVE and labelled as such in the UI. |

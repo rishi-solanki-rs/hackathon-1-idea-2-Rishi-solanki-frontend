@@ -10,6 +10,15 @@ test('health reports guest mode and an engine version', async ({ request }) => {
   expect(body.version).toMatch(/^engine-/);
 });
 
+test('security headers are set and the framework is not advertised', async ({ request }) => {
+  const res = await request.get('/');
+  const h = res.headers();
+  expect(h['x-content-type-options']).toBe('nosniff');
+  expect(h['x-frame-options']).toBe('DENY');
+  expect(h['referrer-policy']).toBe('strict-origin-when-cross-origin');
+  expect(h['x-powered-by']).toBeUndefined();
+});
+
 test('landing shows the demo disclosure and search form', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText(/Demo · test mode · illustrative prices/)).toBeVisible();
