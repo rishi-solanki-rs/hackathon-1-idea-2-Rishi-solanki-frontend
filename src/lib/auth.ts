@@ -22,8 +22,11 @@ export function supabase(): SupabaseClient | null {
       },
     });
     client.auth.onAuthStateChange((_e, s) => {
-      state = { ready: true, session: s };
-      listeners.forEach((l) => l());
+      // Deferred: React re-renders synchronously, and any Supabase call made inside this callback deadlocks on the auth lock.
+      window.setTimeout(() => {
+        state = { ready: true, session: s };
+        listeners.forEach((l) => l());
+      }, 0);
     });
     void client.auth.getSession().then(({ data }) => {
       state = { ready: true, session: data.session };

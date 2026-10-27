@@ -73,6 +73,7 @@ Hosted project: all 5 migrations are applied. Never run `db reset` against it.
 | `pnpm exec playwright test` | Local server in **fixture** mode | 53 journeys × 3 viewports (360, 768, 1280) plus 5 smoke checks, light and dark, axe, no horizontal overflow; screenshots in `test-results/screens/` |
 | `pnpm test:live` | **Real** Duffel, Gemini, Supabase | Real test offers → reprice → **Duffel TEST order**; Gemini explanation passes the guard; two real email accounts: A saves a profile and a plan, B cannot read or overwrite them, A logs out and in and gets them back; test users deleted afterwards |
 | `LIVE=1 BASE_URL=<url> pnpm exec playwright test tests/e2e/live-plan.spec.ts --project=desktop-1280` | **Real**, through the UI | Full wizard → Duffel fares → AI explanation → test booking |
+| `LIVE=1 BASE_URL=<url> node --env-file=.env.local node_modules/@playwright/test/cli.js test tests/e2e/live-account.spec.ts --project=desktop-1280` | **Real** Supabase, through the UI | Create account → build a plan → My plans shows it → log out → log in → still there; deletes its test user |
 | `BASE_URL=<url> EXPECT_PROVIDER=duffel_test pnpm test:smoke` | The deployed site | Health, demo disclosure, planner, login page, labelled search, security headers |
 
 ## 5. Manual end-to-end cases (deployed URL, private window)

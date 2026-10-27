@@ -20,6 +20,8 @@
 | `pnpm test:live` | Pass (5/5): Duffel 7 dates priced, reprice, **Duffel TEST order** created; Gemini `gemini-3.5-flash-lite` explanation accepted by the guard; Supabase email accounts A/B: RLS isolation, re-login restores data, test users deleted |
 | `pnpm build` + `check:bundle:local` | Pass, no server secrets or server env names in 30 client files |
 
+**Deployed checks:** production deployment of `87d0d3c` READY; `test:smoke` 5/5 on https://a-una-milla-demo.vercel.app; LIVE UI journey passed (Duffel test fares → "Written by AI (gemini-3.5-flash-lite), checked against the plan" → Duffel TEST booking). A new LIVE account journey (`tests/e2e/live-account.spec.ts`) then **failed on production**: after signing up, nothing was saved (no request to `plans`). Cause: the Supabase auth callback updated React state synchronously, so sync code ran inside the callback and waited on the auth lock forever. Fixed by deferring the callback (`src/lib/auth.ts`); the journey then passed locally against the hosted project (sign up → plan → My plans → log out → log in → plan still there). Test users cleaned up (0 left).
+
 Found and fixed during QA: the AI guard rejected "approval is not guaranteed" (a caveat), now allowed while positive guarantees and price forecasts are rejected; the award estimate is no longer applied for users with no points; the multi-city submit button no longer says "Plan my trip".
 
 ## Round 2 verification — 27 Oct 2026 ~12:50 IST (real providers, values never printed)
