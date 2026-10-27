@@ -1,5 +1,20 @@
 # Implementation evidence (A Una Milla)
 
+## Fix — 27 Oct 2026 ~18:00 IST (production 504 `OUTCOME_UNKNOWN` on `/api/booking/test-order`)
+
+**Cause.** The server aborted Duffel's order call after 15 s. Duffel test orders for return trips take 12–16 s (measured on production: 12.4 s and 12.7 s; locally 16.1 s). On a slower order the abort fired, the single immediate lookup found nothing and the user got "could not confirm" with no way forward. Duffel had no order for any of those attempts (all orders in the test account listed by key; every one belongs to a test run).
+
+**Fix.**
+- Order call timeout 60 s (`ORDER_TIMEOUT_MS`); the route allows 180 s (`maxDuration`); the browser waits 185 s.
+- After an unclear failure the server looks the order up 4 times over ~12 s before answering "unknown"; it still never posts twice.
+- The real failure (provider code and HTTP status, no secrets) is logged as `[test-order] order call failed`.
+- "Check again" now distinguishes "Duffel answered and has no order for this attempt" (`details.noOrderFound`) from "Duffel unreachable". Once the first attempt can no longer finish (190 s), the page shows "No booking was made" with "Book again (test)", which uses a new idempotency key. Earlier checks say the first request may still be finishing.
+
+**Verified (local only; not pushed or deployed).**
+- `pnpm verify`: 183 tests pass (3 new: slow order waited for; late order found by repeated lookups and posted once; check-only "no order" only when Duffel answered).
+- Live Duffel test via the local server: MAD–JFK return, 2 adults, Business: order took 16,117 ms and succeeded (old code would have aborted at 15 s). MAD–SCL return, 4 adults, First: 2 orders succeeded.
+- Playwright desktop-1280 + mobile-360 booking specs incl. the new "unknown → no order → book again with a new key" journey: 12/12.
+
 ## Round 4 — 27 Oct 2026 ~16:20 IST (master fix plan: booking, engine, account safety)
 
 **Fixed (each with a regression test)**

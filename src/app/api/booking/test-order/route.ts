@@ -9,6 +9,9 @@ import {
   zodIssues,
 } from '@/server/http';
 
+// Order (up to 60 s) plus price check and reconciliation lookups must finish inside one invocation.
+export const maxDuration = 180;
+
 export async function POST(req: Request) {
   const rl = rateLimit(`order:${clientKey(req)}`);
   if (!rl.ok)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw/http';
 import { server } from '../setup/msw';
-import { BookingError, createTestOrder, reprice } from '@/server/booking';
+import { BookingError, ORDER_TIMEOUT_MS, createTestOrder, reprice } from '@/server/booking';
 import type { ServerEnv } from '@/server/env';
 import { TEST_BOOKING_LABEL } from '@/contracts/booking';
 
@@ -143,7 +143,7 @@ describe('Duffel test orders (msw)', () => {
           confirmTotal: { minor: 50000, currency: 'EUR' },
           idempotencyKey: 'key-eeeeeeeeeeeeeeee',
         },
-        { env: duffelEnv, now: NOW },
+        { env: duffelEnv, now: NOW, reconcileDelaysMs: [0, 0] },
       ),
     ).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
     expect(orderCalls).toBe(1);
@@ -264,9 +264,11 @@ describe('Duffel test orders (msw)', () => {
       confirmTotal: { minor: 50000, currency: 'EUR' },
       idempotencyKey: 'key-lost-order-aaaa',
     };
-    const err = await createTestOrder(req, { env: duffelEnv, now: NOW }).catch(
-      (e: BookingError) => e,
-    );
+    const err = await createTestOrder(req, {
+      env: duffelEnv,
+      now: NOW,
+      reconcileDelaysMs: [0, 0],
+    }).catch((e: BookingError) => e);
     expect(err).toMatchObject({ code: 'OUTCOME_UNKNOWN' });
     expect((err as BookingError).message).not.toMatch(/no booking was made/i);
     // Checking again with the same key only looks the order up; it never creates a second one.
@@ -274,7 +276,7 @@ describe('Duffel test orders (msw)', () => {
       { ...req, checkOnly: true },
       { env: duffelEnv, now: NOW },
     ).catch((e: BookingError) => e);
-    expect(still).toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect(still).toMatchObject({ code: 'OUTCOME_UNKNOWN', details: { noOrderFound: true } });
     listed = [
       {
         id: 'ord_l',
@@ -286,6 +288,90 @@ describe('Duffel test orders (msw)', () => {
     const found = await createTestOrder({ ...req, checkOnly: true }, { env: duffelEnv, now: NOW });
     expect(found.data.reference).toBe('ZZLATE');
     expect(posts).toBe(1);
+  });
+
+  it('regression (prod 504): a slow order is waited for, not cut off at 15 s', async () => {
+    expect(ORDER_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
+    server.use(
+      http.get('https://api.duffel.com/air/offers/off_1', () => HttpResponse.json({ data: offer })),
+      noOrders,
+      http.post('https://api.duffel.com/air/orders', async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        return HttpResponse.json({
+          data: { id: 'ord_s', booking_reference: 'ZZSLOW', live_mode: false },
+        });
+      }),
+    );
+    const res = await createTestOrder(
+      {
+        offerRef: 'off_1',
+        confirmTotal: { minor: 50000, currency: 'EUR' },
+        idempotencyKey: 'key-slow-order-aaaa',
+      },
+      { env: duffelEnv, now: NOW, orderTimeoutMs: 2_000 },
+    );
+    expect(res.data.reference).toBe('ZZSLOW');
+  });
+
+  it('regression (prod 504): an order that appears late is found by repeated lookups, posted once', async () => {
+    let posts = 0;
+    let lists = 0;
+    const key = 'key-late-order-aaaa';
+    server.use(
+      http.get('https://api.duffel.com/air/offers/off_1', () => HttpResponse.json({ data: offer })),
+      http.get('https://api.duffel.com/air/orders', () => {
+        lists++;
+        // First lookup is the pre-check; the order shows up on the third lookup after the timeout.
+        return HttpResponse.json({
+          data:
+            lists >= 4
+              ? [
+                  {
+                    id: 'ord_t',
+                    booking_reference: 'ZZLATE',
+                    live_mode: false,
+                    metadata: { aum_key: key },
+                  },
+                ]
+              : [],
+        });
+      }),
+      http.post('https://api.duffel.com/air/orders', async () => {
+        posts++;
+        await new Promise((r) => setTimeout(r, 500));
+        return HttpResponse.json({ data: { id: 'ord_t', live_mode: false } });
+      }),
+    );
+    const res = await createTestOrder(
+      { offerRef: 'off_1', confirmTotal: { minor: 50000, currency: 'EUR' }, idempotencyKey: key },
+      { env: duffelEnv, now: NOW, orderTimeoutMs: 50, reconcileDelaysMs: [0, 10, 10, 10] },
+    );
+    expect(res.data.reference).toBe('ZZLATE');
+    expect(posts).toBe(1);
+  });
+
+  it('check-only reports "no order found" only when Duffel answered, never when it was unreachable', async () => {
+    const req = {
+      offerRef: 'off_1',
+      confirmTotal: { minor: 50000, currency: 'EUR' },
+      idempotencyKey: 'key-check-only-aaaa',
+      checkOnly: true,
+    };
+    server.use(noOrders);
+    const none = await createTestOrder(req, { env: duffelEnv, now: NOW }).catch(
+      (e: BookingError) => e,
+    );
+    expect(none).toMatchObject({ code: 'OUTCOME_UNKNOWN', details: { noOrderFound: true } });
+    server.use(
+      http.get('https://api.duffel.com/air/orders', () =>
+        HttpResponse.json({ errors: [{ code: 'internal' }] }, { status: 500 }),
+      ),
+    );
+    const down = await createTestOrder(req, { env: duffelEnv, now: NOW }).catch(
+      (e: BookingError) => e,
+    );
+    expect(down).toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect((down as BookingError).details).toBeUndefined();
   });
 
   it('regression: two concurrent requests with one key create one order', async () => {

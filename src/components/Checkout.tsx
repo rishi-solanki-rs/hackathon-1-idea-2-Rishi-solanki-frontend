@@ -11,6 +11,7 @@ import {
 import type { OptionDto } from '@/contracts/search';
 import type { Money } from '@/domain/money';
 import { Ticket, itineraryFromOption } from './booking/Ticket';
+import { ATTEMPT_SETTLED_MS, ORDER_CLIENT_TIMEOUT_MS } from '@/lib/bookingTiming';
 import { Alert, Badge, Button, ButtonLink, Card } from './ui';
 import { eur } from './format';
 import { OptionPage } from './results/OptionPage';
@@ -23,15 +24,16 @@ type Phase =
   | { kind: 'expired' }
   | { kind: 'error'; message: string }
   | { kind: 'unknown'; message: string }
+  | { kind: 'not_booked' }
   | { kind: 'done'; order: TestOrderResponse['data'] };
 
-async function post(url: string, body: unknown) {
+async function post(url: string, body: unknown, timeoutMs = 45_000) {
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return { res, json: await res.json().catch(() => null) };
   } catch {
@@ -44,6 +46,7 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
   const [total, setTotal] = useState<Money>(o.cashToday);
   const [itinerary, setItinerary] = useState<ItineraryDto>(() => itineraryFromOption(o));
   const key = useRef<string>('');
+  const attemptAt = useRef(0);
 
   async function confirm(confirmTotal: Money, checkOnly = false) {
     if (!o.offerRef) return;
@@ -80,13 +83,26 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
       label: checkOnly ? 'Checking with Duffel…' : 'Creating your test booking…',
     });
     key.current ||= crypto.randomUUID();
-    const od = await post('/api/booking/test-order', {
-      offerRef: o.offerRef,
-      confirmTotal,
-      expiresAt: o.expiresAt,
-      idempotencyKey: key.current,
-      ...(checkOnly ? { checkOnly: true } : {}),
-    });
+    if (!checkOnly && !attemptAt.current) attemptAt.current = Date.now();
+    const od = await post(
+      '/api/booking/test-order',
+      {
+        offerRef: o.offerRef,
+        confirmTotal,
+        expiresAt: o.expiresAt,
+        idempotencyKey: key.current,
+        ...(checkOnly ? { checkOnly: true } : {}),
+      },
+      ORDER_CLIENT_TIMEOUT_MS,
+    );
+    if (od.json?.error?.details?.noOrderFound)
+      return Date.now() - attemptAt.current >= ATTEMPT_SETTLED_MS
+        ? setPhase({ kind: 'not_booked' })
+        : setPhase({
+            kind: 'unknown',
+            message:
+              'Duffel has no booking from this attempt yet; the first request may still be finishing. Check again in a minute.',
+          });
     if (!od.res || od.res.status === 504)
       return setPhase({
         kind: 'unknown',
@@ -226,6 +242,26 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
           action={<Button onClick={() => confirm(total, true)}>Check again</Button>}
         >
           {phase.message} “Check again” only looks the booking up; it never books a second time.
+        </Alert>
+      ) : null}
+      {phase.kind === 'not_booked' ? (
+        <Alert
+          kind="info"
+          live
+          title="No booking was made"
+          action={
+            <Button
+              onClick={() => {
+                key.current = '';
+                attemptAt.current = 0;
+                void confirm(total);
+              }}
+            >
+              Book again (test)
+            </Button>
+          }
+        >
+          Duffel confirmed it has no booking from the earlier attempt, so you can safely try again.
         </Alert>
       ) : null}
       {phase.kind === 'review' || phase.kind === 'working' ? (

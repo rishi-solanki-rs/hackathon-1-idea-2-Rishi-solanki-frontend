@@ -10,6 +10,7 @@ import {
   type TestOrderResponse,
 } from '@/contracts/booking';
 import type { Money } from '@/domain/money';
+import { ATTEMPT_SETTLED_MS, ORDER_CLIENT_TIMEOUT_MS } from '@/lib/bookingTiming';
 import { Alert, Badge, Button, ButtonLink } from '../ui';
 import { Ticket } from '../booking/Ticket';
 import { eur } from '../format';
@@ -21,15 +22,16 @@ type Phase =
   | { kind: 'expired' }
   | { kind: 'error'; message: string }
   | { kind: 'unknown'; message: string }
+  | { kind: 'not_booked' }
   | { kind: 'done'; order: TestOrderResponse['data'] };
 
-async function post(url: string, body: unknown) {
+async function post(url: string, body: unknown, timeoutMs = 45_000) {
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return { res, json: await res.json().catch(() => null) };
   } catch {
@@ -57,6 +59,7 @@ function OfferBooking() {
   const [expiresAt, setExpiresAt] = useState(exp);
   const [phase, setPhase] = useState<Phase>({ kind: 'review' });
   const key = useRef(newKey());
+  const attemptAt = useRef(0);
   const valid = /^(off_[A-Za-z0-9]+|fixture:[A-Za-z0-9_:.\-]+)$/.test(ref) && total.minor > 0;
 
   useEffect(() => {
@@ -99,13 +102,26 @@ function OfferBooking() {
       kind: 'working',
       label: checkOnly ? 'Checking with Duffel…' : 'Creating the test booking…',
     });
-    const od = await post('/api/booking/test-order', {
-      offerRef: ref,
-      confirmTotal,
-      expiresAt,
-      idempotencyKey: key.current,
-      ...(checkOnly ? { checkOnly: true } : {}),
-    });
+    if (!checkOnly && !attemptAt.current) attemptAt.current = Date.now();
+    const od = await post(
+      '/api/booking/test-order',
+      {
+        offerRef: ref,
+        confirmTotal,
+        expiresAt,
+        idempotencyKey: key.current,
+        ...(checkOnly ? { checkOnly: true } : {}),
+      },
+      ORDER_CLIENT_TIMEOUT_MS,
+    );
+    if (od.json?.error?.details?.noOrderFound)
+      return Date.now() - attemptAt.current >= ATTEMPT_SETTLED_MS
+        ? setPhase({ kind: 'not_booked' })
+        : setPhase({
+            kind: 'unknown',
+            message:
+              'Duffel has no booking from this attempt yet; the first request may still be finishing. Check again in a minute.',
+          });
     if (!od.res || od.res.status === 504 || od.json?.error?.code === 'OUTCOME_UNKNOWN')
       return setPhase({
         kind: 'unknown',
@@ -225,6 +241,26 @@ function OfferBooking() {
           }
         >
           {phase.message} “Check again” only looks the booking up; it never books a second time.
+        </Alert>
+      ) : null}
+      {phase.kind === 'not_booked' ? (
+        <Alert
+          kind="info"
+          live
+          title="No booking was made"
+          action={
+            <Button
+              onClick={() => {
+                key.current = newKey();
+                attemptAt.current = 0;
+                void order(total);
+              }}
+            >
+              Book again (test)
+            </Button>
+          }
+        >
+          Duffel confirmed it has no booking from the earlier attempt, so you can safely try again.
         </Alert>
       ) : null}
 

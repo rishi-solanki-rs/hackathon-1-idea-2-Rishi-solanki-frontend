@@ -69,7 +69,19 @@ export class BookingError extends Error {
   }
 }
 
-type Deps = { env?: ServerEnv; now?: Date; fetchImpl?: typeof fetch };
+type Deps = {
+  env?: ServerEnv;
+  now?: Date;
+  fetchImpl?: typeof fetch;
+  /** Duffel test orders on return trips take 12–13 s; slower ones must not be cut off. */
+  orderTimeoutMs?: number;
+  /** Waits before each lookup after an unclear failure (the order can appear late). */
+  reconcileDelaysMs?: number[];
+};
+
+export const ORDER_TIMEOUT_MS = 60_000;
+const RECONCILE_DELAYS_MS = [0, 2_000, 4_000, 6_000];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const isFixture = (ref: string) => ref.startsWith('fixture:');
 
@@ -207,6 +219,7 @@ const inflight = new Map<string, Promise<TestOrderResponse>>();
 
 const UNKNOWN_MESSAGE =
   'We could not confirm whether Duffel created this test booking. Do not book again: press “Check again” in a minute.';
+const NOT_FOUND_MESSAGE = 'Duffel has no booking from this attempt.';
 
 export async function createTestOrder(
   req: TestOrderRequest,
@@ -285,7 +298,10 @@ async function runOrder(req: TestOrderRequest, deps: Deps): Promise<TestOrderRes
   };
   const existing = await lookup();
   if (existing) return respond(existing.bookingReference, 'DUFFEL_TEST', req.confirmTotal);
-  if (req.checkOnly) throw new BookingError('OUTCOME_UNKNOWN', UNKNOWN_MESSAGE);
+  if (req.checkOnly)
+    throw existing === null
+      ? new BookingError('OUTCOME_UNKNOWN', NOT_FOUND_MESSAGE, { noOrderFound: true })
+      : new BookingError('OUTCOME_UNKNOWN', UNKNOWN_MESSAGE);
   if (existing === undefined)
     throw new BookingError(
       'PROVIDER_ERROR',
@@ -311,10 +327,16 @@ async function runOrder(req: TestOrderRequest, deps: Deps): Promise<TestOrderRes
         passengers: syntheticPassengers(offer.passengerIds.length),
         key: req.idempotencyKey,
       },
-      AbortSignal.timeout(15000),
+      AbortSignal.timeout(deps.orderTimeoutMs ?? ORDER_TIMEOUT_MS),
     );
     return respond(order.bookingReference, 'DUFFEL_TEST', priced.response.data.total, offer);
   } catch (e) {
+    console.error('[test-order] order call failed', {
+      code: e instanceof ProviderError ? e.code : 'UNEXPECTED',
+      message: (e as Error).message,
+      passengers: offer.passengerIds.length,
+      slices: offer.itinerary?.slices.length,
+    });
     if (
       e instanceof ProviderError &&
       (e.code === 'REJECTED' || e.code === 'OFFER_EXPIRED' || e.code === 'PRICE_CHANGED')
@@ -326,9 +348,12 @@ async function runOrder(req: TestOrderRequest, deps: Deps): Promise<TestOrderRes
         'Duffel returned a non-test order; it was not accepted.',
       );
     // Timeout, lost connection or an unreadable answer: the order may exist. Reconcile, never re-post.
-    const found = await lookup();
-    if (found)
-      return respond(found.bookingReference, 'DUFFEL_TEST', priced.response.data.total, offer);
+    for (const wait of deps.reconcileDelaysMs ?? RECONCILE_DELAYS_MS) {
+      await sleep(wait);
+      const found = await lookup();
+      if (found)
+        return respond(found.bookingReference, 'DUFFEL_TEST', priced.response.data.total, offer);
+    }
     throw new BookingError('OUTCOME_UNKNOWN', UNKNOWN_MESSAGE);
   }
 }

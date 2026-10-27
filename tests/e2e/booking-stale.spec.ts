@@ -123,6 +123,73 @@ async function mockBooking(page: Page) {
   });
 }
 
+test('regression (prod 504): unknown outcome → check finds no order → book again with a new key', async ({
+  page,
+}) => {
+  await page.clock.install();
+  await mockBooking(page);
+  const keys: string[] = [];
+  let checks = 0;
+  await page.route('**/api/booking/test-order', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.checkOnly) {
+      checks++;
+      return route.fulfill({
+        status: 504,
+        json: {
+          ok: false,
+          error: {
+            code: 'OUTCOME_UNKNOWN',
+            message: 'Duffel has no booking from this attempt.',
+            details: { noOrderFound: true },
+          },
+        },
+      });
+    }
+    keys.push(body.idempotencyKey);
+    if (keys.length === 1)
+      return route.fulfill({
+        status: 504,
+        json: {
+          ok: false,
+          error: { code: 'OUTCOME_UNKNOWN', message: 'We could not confirm the booking.' },
+        },
+      });
+    return route.fulfill({
+      json: {
+        ok: true,
+        status: 'ok',
+        data: {
+          reference: 'REFNEW',
+          offerRef: body.offerRef,
+          mode: 'DUFFEL_TEST',
+          total: body.confirmTotal,
+          label: 'TEST — no real ticket issued; no money charged',
+          passengers: ['Lucia Demo (fictional test traveller)'],
+          createdAt: new Date().toISOString(),
+        },
+      },
+    });
+  });
+  await page.goto(`/plan/book?ref=off_A&total=11111&dep=${future(40)}&carrier=Duffel+Airways`);
+  await page.getByRole('button', { name: 'Confirm test booking' }).click();
+  await expect(page.getByText('We could not confirm the booking yet')).toBeVisible();
+
+  // Too soon: the first request could still be finishing, so booking again is not offered.
+  await page.getByRole('button', { name: 'Check again' }).click();
+  await expect(page.getByText(/may still be finishing/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Book again/ })).toHaveCount(0);
+
+  await page.clock.fastForward('03:20');
+  await page.getByRole('button', { name: 'Check again' }).click();
+  await expect(page.getByText('No booking was made')).toBeVisible();
+  await page.getByRole('button', { name: /Book again/ }).click();
+  await expect(page.getByText('REFNEW')).toBeVisible();
+  expect(checks).toBe(2);
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).not.toBe(keys[1]);
+});
+
 test('regression: opening a new offer after a booking shows that offer, not the previous booking', async ({
   page,
 }) => {
