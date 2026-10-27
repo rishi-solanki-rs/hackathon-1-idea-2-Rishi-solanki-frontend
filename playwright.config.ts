@@ -29,10 +29,19 @@ export default defineConfig({
         viewport,
         hasTouch: name === 'mobile-360',
         isMobile: false,
+        storageState: process.env.SHARE_URL ? 'test-results/.auth/share.json' : undefined,
       },
     })),
-    { name: 'smoke', testMatch: /smoke\.spec\.ts/, use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'smoke',
+      testMatch: /smoke\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: process.env.SHARE_URL ? 'test-results/.auth/share.json' : undefined,
+      },
+    },
   ],
+  globalSetup: './tests/e2e/global-setup.ts',
   webServer: external
     ? undefined
     : {

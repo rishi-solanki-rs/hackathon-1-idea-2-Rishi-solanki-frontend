@@ -130,7 +130,46 @@ Repo `backend/`, Supabase CLI 2.122.0 (pinned dev dependency), local Docker imag
 | `pnpm check:bundle` | Passed |
 | Playwright on 3 viewports | **84 passed (1.7 min)** |
 
-## Release status and blockers (27 Oct ~12:25)
+## Release — 27 Oct 2026 ~13:15 (supersedes the blocker table below)
+
+**GitHub (both repos pushed)**
+- Git Credential Manager (`manager-core`, system config) had a stored credential. `gh` is still not logged in, but the push did not need it.
+  - frontend `main` = `82b14c36d62dea6ab17bdd5e2a76935dca453f17` (plus a later evidence-only commit);
+  - backend `main` = `af3214d`.
+
+**GitHub Actions**
+
+| Run | Result | Note |
+|---|---|---|
+| app-ci on `149444d` | Failed | `pnpm install --frozen-lockfile`: the lockfile still had `^` specifiers after the exact pins |
+| app-ci on `7a478bd` | Failed | `tsc`: `next-env.d.ts` is gitignored, so `.jpg` imports were untyped on a fresh checkout |
+| app-ci on `b062ca8` | **Success** | Fixed by `typecheck: next typegen && tsc` |
+| app-ci on `82b14c3` | **Success** | Ubuntu: verify, build, bundle check, Playwright 3 viewports, gitleaks |
+| db-ci on `41fcf44` and `af3214d` | **Success** | `supabase db reset` + 41 pgTAP + `db lint` + gitleaks |
+
+**Fresh Windows clone**
+- `pnpm install --frozen-lockfile && pnpm verify` → 68/68.
+- An earlier run found CRLF files from `core.autocrlf` failing Prettier. Fixed with `.gitattributes` (`eol=lf`) in both repos.
+
+**Vercel (owner's Hobby account, non-commercial demo, owner approved team access in the browser)**
+- **Project:** `a-una-milla-demo` (`prj_Io2H0ba6Zm895lnVhwLx5eAQPtaV`). Not Git-linked, so pushes do not auto-deploy. Functions run in `cdg1`, on Node 24.x. Env (preview + development only): `AUTH_MODE=guest`, `PROVIDER_MODE=fixture`, `FX_LIVE=on`, `RATE_LIMIT_PER_MIN=20`.
+- **Production avoided:** the first deployment from `main` was auto-targeted to **production** by Vercel. It was **cancelled before it went live** (`dpl_Fw3R…`, `CANCELED`). After that, only the branch `demo-preview` (same commits) was deployed, with `target: null` (preview).
+- **Tested deployment:** `dpl_GmC8PgS5qaDFoT2FN8DqJhJ5JZdS` from `82b14c3`, READY.
+  - URL: `https://a-una-milla-demo-9mw6bkxt0-rishi-solankis-projects.vercel.app`
+  - Branch alias: `a-una-milla-demo-git-demo-preview-rishi-solankis-projects.vercel.app`
+- **Protection:** an unauthenticated `curl` gets 302 to `vercel.com/sso-api`. The preview is protected by Vercel Authentication.
+- **Share link:** a temporary 23-hour share link was created for testing and for the owner (expires 28 Oct 2026 05:32 UTC). It is not stored in the repo.
+
+**Tests against the deployed preview (via the share session)**
+
+| Command | Result |
+|---|---|
+| `BASE_URL=… SHARE_URL=… pnpm exec playwright test --project=smoke` | **4 passed**: health (guest mode), disclosure + form, labelled search, security headers |
+| `… --project=desktop-1280 -g "T-FUN-003\|T-FUN-001\|T-FUN-002\|T-INT-004"` | **4 passed**: CS-03 €1,674 and detail reload, CS-01 €78, CS-05 open-jaw, test checkout €702 → €719 |
+
+A first attempt at the deployed journeys failed 8/8 because the viewport projects lacked the share cookie (screenshot: Vercel login page). This was a harness fix, not an app change.
+
+## Release status and blockers (27 Oct ~12:25, historical)
 
 | Item | Status |
 |---|---|

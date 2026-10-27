@@ -169,15 +169,17 @@ The first run also corrected a wrong label in doc 11 ("REC (30)" → 29; the tot
 | Backend DB (catalogue, user tables, RLS, RPC) | Done locally | 41 pgTAP tests, `db lint` clean |
 | TASK-003 auth spike / `AUTH_MODE=supabase` | Not started | Guest mode only (D-29) |
 | Plan-ahead, card allocation, verdict, replanning (Tier B) | Not started | Engine spec in doc 05 / doc 12 §B.8 |
-| TASK-022 / TASK-043 deploy + smoke on a URL | **Blocked** | Push needs `gh auth login`; Vercel deploy needs the Git link or `vercel login` |
+| TASK-022 deploy + smoke on a URL | Done (preview) | Vercel preview `dpl_GmC8…` from `82b14c3`; smoke 4/4 + 4 key journeys passed; CI green on both repos |
+| TASK-043 submission | Pending owner decision D-33 | The preview is protected; a jury link needs a public URL or a share link |
 
 ## 10. Exact next actions
 
-1. **Owner:** run `gh auth login` (or tell me which credential to use), so I can push both repos.
-2. **Then (agent):**
-   - push `main` for both repos;
-   - create a dedicated Vercel project (Hobby, non-commercial) linked to the frontend repo, with `AUTH_MODE=guest` and `PROVIDER_MODE=fixture`;
-   - deploy a **preview** (protected by default; nothing in production);
-   - run `BASE_URL=<preview> pnpm test:smoke`.
-3. **Owner decision D-33:** whether the jury URL may be a public production domain of the demo project.
-4. **Optional:** add a `duffel_test_` token in the Vercel env to show Duffel sandbox fares.
+1. **Owner decision D-33 (jury URL):** choose one.
+   - **Keep the protected preview** and send a Vercel share link (it expires after 23 h and must be renewed for the demo day).
+   - **Promote the tested build** to the demo project's production domain (`a-una-milla-demo-rishi-solankis-projects.vercel.app`). It becomes public, which is allowed on Hobby for non-commercial use.
+2. **Optional:** add a `duffel_test_` token as a Vercel env var to show Duffel sandbox fares. The adapter is verified only with mocks until then.
+3. **Next build items in dependency order:**
+   - TASK-003 auth spike;
+   - plan-ahead and card allocation (doc 12 §B.8 limits);
+   - the book-now-or-wait verdict;
+   - replanning.
