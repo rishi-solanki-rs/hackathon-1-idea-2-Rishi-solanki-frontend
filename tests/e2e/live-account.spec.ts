@@ -46,15 +46,19 @@ test('LIVE: create an account, build a plan, see it in My plans, log out and bac
   await page.getByLabel('I don’t have any loyalty points').check();
   await page.getByRole('button', { name: /Next: Spending/ }).click();
   await page.getByLabel('Yes, always').check();
+  // A full page load would cancel the save in flight, so wait for it before leaving.
+  const saved = page.waitForResponse(
+    (r) => r.url().includes('/rest/v1/plans') && r.request().method() === 'POST',
+    { timeout: 90_000 },
+  );
   await page.getByRole('button', { name: 'Build my plan' }).click();
   await expect(
     page.getByRole('region', { name: 'When to book' }).getByText('Duffel test data'),
   ).toBeVisible({ timeout: 90_000 });
+  expect((await saved).status()).toBeLessThan(300);
 
-  await expect(async () => {
-    await page.goto('/my-plans');
-    await expect(page.getByText(/London/).first()).toBeVisible({ timeout: 3_000 });
-  }).toPass({ timeout: 30_000 });
+  await page.getByRole('link', { name: 'My plans' }).first().click();
+  await expect(page.getByText(/London/).first()).toBeVisible();
   await page.screenshot({ path: 'test-results/screens/live-my-plans.png', fullPage: true });
 
   await page.goto('/login');
