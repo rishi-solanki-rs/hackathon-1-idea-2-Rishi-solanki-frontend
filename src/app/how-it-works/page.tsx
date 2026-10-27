@@ -53,7 +53,7 @@ export default function HowItWorks() {
         <ol className="mt-3 grid gap-3">
           {flow.map(([k, v], i) => (
             <li key={k} className="flex gap-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sea text-xs font-bold text-white">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sea text-xs font-bold text-sea-ink">
                 {i + 1}
               </span>
               <div>

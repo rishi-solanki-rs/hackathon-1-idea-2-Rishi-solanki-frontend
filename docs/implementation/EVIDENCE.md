@@ -260,6 +260,15 @@ Repo `backend/`, Supabase CLI 2.122.0 (pinned dev dependency), local Docker imag
 | `pnpm check:bundle` | Passed |
 | Playwright on 3 viewports | **84 passed (1.7 min)** |
 
+## Master Fix & Modern UI Verification — 27 Oct 2026
+
+| Gate | Command | Result |
+|---|---|---|
+| Mocked unit & integration + static checks | `pnpm verify` | **17 test files, 180/180 tests passed**; Prettier, ESLint, `next typegen && tsc --noEmit`, secret scan (197 files, 0 findings), env-file check, encoding check all passed |
+| Production build & client bundle audit | `pnpm build:e2e && pnpm check:bundle` | **Passed** (29 client chunks, 0 server secrets or server env names) |
+| Playwright E2E + axe-core WCAG AA (360 / 768 / 1280, light & dark) | `pnpm test:e2e` | **164 passed, 0 failed** (Midnight Indigo `#282B4A` / Vanilla `#EEEBDA` palette, boarding-pass `Ticket`, 3-line plan summary, official rate override warning + reset, multi-city ticket booking) |
+| Live providers (Duffel test mode 1 & 4 adults, Gemini 3.5, Supabase RLS) | `pnpm test:live` | **2 test files, 6/6 passed** (7 sampled dates priced, 1-adult & 4-adult test orders created with distinct travellers and reconciled by `aum_key`, structured Gemini explanation verified by guard, Supabase cross-user isolation verified) |
+
 ## Release — 27 Oct 2026 ~13:15 (supersedes the blocker table below)
 
 **GitHub (both repos pushed)**

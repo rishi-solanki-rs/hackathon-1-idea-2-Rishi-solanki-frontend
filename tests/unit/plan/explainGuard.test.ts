@@ -78,4 +78,59 @@ describe('AI explanation guard', () => {
     expect(text[0]).toBe(plan.verdict.reasons[0]);
     expect(text.join(' ')).not.toMatch(/guarantee/i);
   });
+
+  it('accepts formatted human dates and formatted money, and rejects unknown human dates', () => {
+    const ok = [
+      'Your 34,000 Avios award plus €150.00 in taxes is worth about €490, below the €600 test fare.',
+      'Check the seat before Fri 5 Feb 2027.',
+    ];
+    expect(checkExplanation(ok, facts, brands)).toEqual({ ok: true });
+    expect(checkExplanation(['Book before Mon 12 Jan 2027.'], facts, brands)).toMatchObject({
+      ok: false,
+      reason: expect.stringMatching(/unknown date/),
+    });
+  });
+
+  it('rejects explanations that contradict the verdict or leak internal field names', () => {
+    const cashPlan = computePlan(
+      {
+        today: '2026-11-01',
+        trip: {
+          origin: 'MAD',
+          destination: 'JFK',
+          tripType: 'one_way',
+          earliestDepart: '2027-03-01',
+          latestDepart: '2027-03-01',
+          adults: 1,
+          cabin: 'economy',
+          objective: 'B_ECONOMIC_COST',
+        },
+        profile: profile({ noCards: true, noPoints: true }),
+        award: null,
+        flights: flights(600),
+        routes: ROUTES,
+        referenceEurPerPoint: '0.010',
+        programName: () => 'Iberia Club',
+        programWebsite: () => 'https://www.iberia.com/',
+      },
+      ['iberia_club'],
+    );
+    const cashFacts = planFacts(cashPlan, () => 'Iberia Club');
+    expect(
+      checkExplanation(['Use your points to book the award for €600.'], cashFacts, brands),
+    ).toMatchObject({
+      ok: false,
+      reason: 'contradicts cash verdict',
+    });
+    expect(
+      checkExplanation(['Paying cash is better than using 34,000 points.'], facts, brands),
+    ).toMatchObject({
+      ok: false,
+      reason: 'contradicts award verdict',
+    });
+    expect(checkExplanation(['Your pointsUsableNow is 40,000.'], facts, brands)).toMatchObject({
+      ok: false,
+      reason: 'internal field name',
+    });
+  });
 });

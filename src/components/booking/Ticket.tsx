@@ -1,11 +1,42 @@
 import { Briefcase, Clock, Plane, RotateCcw, Users } from 'lucide-react';
 import type { ItineraryDto } from '@/contracts/booking';
+import type { OptionDto } from '@/contracts/search';
 import type { Money } from '@/domain/money';
-import { Badge, Card } from '../ui';
+import { Badge, Card, Skeleton } from '../ui';
 import { cityOf, dateOf, duration, eur, timeOf } from '../format';
 import { cn } from '@/lib/cn';
 
 const condText = { allowed: 'Yes', not_allowed: 'No', unknown: 'Not stated' } as const;
+
+/** Converts a search OptionDto into an ItineraryDto for the boarding-pass Ticket view. */
+export function itineraryFromOption(o: OptionDto, adults = 1): ItineraryDto {
+  const carrier = o.slices[0]?.segments[0]?.carrier ?? 'Flight';
+  return {
+    owner: carrier,
+    sandboxAirline: /duffel airways/i.test(carrier),
+    passengers: adults,
+    currency: o.cashTotal.currency,
+    refund: o.conditions.refund,
+    change: o.conditions.change,
+    slices: o.slices.map((s) => ({
+      from: s.from,
+      to: s.to,
+      fromCity: cityOf(s.from),
+      toCity: cityOf(s.to),
+      durationMin: s.durationMin,
+      segments: s.segments.map((g) => ({
+        from: g.from,
+        to: g.to,
+        departAt: g.departAt,
+        arriveAt: g.arriveAt,
+        durationMin: g.durationMin,
+        flightNumber: g.flightNumber,
+        carrier: g.carrier,
+        cabin: o.cabin.replace('_', ' '),
+      })),
+    })),
+  };
+}
 
 /** Boarding-pass style view of a Duffel test offer or order. */
 export function Ticket({
@@ -27,8 +58,15 @@ export function Ticket({
 }) {
   const slices = itinerary?.slices ?? [];
   return (
-    <Card className={cn('anim-ticket-in overflow-hidden', className)} aria-label="Flight ticket">
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-sea px-4 py-3 text-white sm:px-6">
+    <Card
+      className={cn(
+        reference ? 'anim-ticket-print' : 'anim-ticket-in',
+        'overflow-hidden',
+        className,
+      )}
+      aria-label="Flight ticket"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#282b4a] px-4 py-3 text-[#faf8ef] sm:px-6 dark:bg-[#16182c]">
         <span className="flex items-center gap-2 font-semibold">
           <Plane aria-hidden className="size-4" />{' '}
           {itinerary?.owner ?? fallback?.carrier ?? 'Flight'}
@@ -76,6 +114,15 @@ export function Ticket({
                     </span>
                     <span className="relative block h-5 w-full">
                       <span className="absolute top-1/2 right-0 left-0 border-t-2 border-dashed border-line" />
+                      <span className="absolute top-1/2 left-0 size-2 -translate-y-1/2 rounded-full bg-sea" />
+                      <span className="absolute top-1/2 right-0 size-2 -translate-y-1/2 rounded-full bg-terracotta" />
+                      {Array.from({ length: stops }, (_, dotIdx) => (
+                        <span
+                          key={dotIdx}
+                          style={{ left: `${((dotIdx + 1) / (stops + 1)) * 100}%` }}
+                          className="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sea bg-surface"
+                        />
+                      ))}
                       <Plane
                         aria-hidden
                         className="absolute top-1/2 left-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rotate-90 text-sea"
@@ -103,6 +150,7 @@ export function Ticket({
                         <strong className="font-mono">{g.flightNumber || '—'}</strong> {g.from}{' '}
                         {timeOf(g.departAt)} → {g.to} {timeOf(g.arriveAt)}
                         {g.fromTerminal ? ` · T${g.fromTerminal}` : ''}
+                        {g.toTerminal ? ` → T${g.toTerminal}` : ''}
                       </span>
                       <span className="text-ink-soft">
                         {[
@@ -122,14 +170,17 @@ export function Ticket({
             );
           })
         ) : (
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <p className="font-display text-3xl">{fallback?.from ?? '—'}</p>
-            <Plane aria-hidden className="size-5 rotate-90 text-sea" />
-            <p className="text-right font-display text-3xl">{fallback?.to ?? '—'}</p>
-            <p className="col-span-3 text-sm text-ink-soft">
+          <div className="grid gap-3">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+              <p className="font-display text-3xl">{fallback?.from ?? '—'}</p>
+              <Plane aria-hidden className="size-5 rotate-90 text-sea" />
+              <p className="text-right font-display text-3xl">{fallback?.to ?? '—'}</p>
+            </div>
+            <p className="text-sm text-ink-soft">
               {fallback?.dep ? dateOf(fallback.dep) : ''}
               {fallback?.ret ? ` → ${dateOf(fallback.ret)}` : ''} · Loading flight details…
             </p>
+            <Skeleton className="h-14" />
           </div>
         )}
 
@@ -164,6 +215,21 @@ export function Ticket({
             <dd className="font-semibold">{itinerary ? condText[itinerary.change] : '—'}</dd>
           </div>
         </dl>
+
+        {passengers?.length ? (
+          <div className="rounded-xl border border-line bg-sand/40 p-3 text-xs">
+            <p className="font-semibold tracking-wider text-ink-muted uppercase">
+              Passenger manifest (synthetic test travellers)
+            </p>
+            <ul className="mt-1.5 grid gap-1 sm:grid-cols-2">
+              {passengers.map((p, i) => (
+                <li key={i} className="font-medium text-ink">
+                  {i + 1}. {p}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div className="ticket-perf grid gap-3 px-4 py-4 sm:grid-cols-[1fr_auto] sm:items-end sm:px-6">
@@ -181,9 +247,6 @@ export function Ticket({
                 : ''}
             </p>
           )}
-          {passengers?.length ? (
-            <p className="mt-1 text-ink-soft">{passengers.join(', ')}</p>
-          ) : null}
         </div>
         <div className="text-right">
           {itinerary?.baseAmount && itinerary.taxAmount ? (

@@ -258,73 +258,131 @@ function CardRow({
 
           <fieldset className="grid gap-3">
             <legend className="text-sm font-semibold">Points per €1 spent</legend>
-            {c.earn.map((r, i) => (
-              <div
-                key={i}
-                className="grid gap-3 rounded-xl bg-sand/60 p-3 sm:grid-cols-[1.4fr_1fr_1fr]"
-              >
-                <Field id={`${p}-r${i}-cat`} label="On">
-                  <select
-                    id={`${p}-r${i}-cat`}
-                    value={r.category}
-                    onChange={(e) =>
-                      setRule(i, (x) => ({
-                        ...x,
-                        category: e.target.value as EarnRule['category'],
-                      }))
-                    }
-                    className={fieldClass}
-                  >
-                    <option value="all">Any purchase</option>
-                    {SPEND_CATEGORIES.map((k) => (
-                      <option key={k} value={k}>
-                        {CATEGORY_LABELS[k]}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field
-                  id={`${p}-r${i}-rate`}
-                  label="Points per €1"
-                  hint={
-                    r.pointsPerEuro.status === 'VERIFIED' ? 'From the official page' : undefined
-                  }
+            {c.earn.map((r, i) => {
+              const officialRule = cat?.earn.find((er) => er.category === r.category);
+              const offVal =
+                officialRule?.pointsPerEuro.status === 'VERIFIED'
+                  ? officialRule.pointsPerEuro.value
+                  : null;
+              const isOverridden =
+                offVal !== null &&
+                r.pointsPerEuro.value !== null &&
+                Math.abs(r.pointsPerEuro.value - offVal) > 1e-4;
+              const isHigh =
+                r.pointsPerEuro.value !== null &&
+                ((r.category === 'all' && r.pointsPerEuro.value > 3) || r.pointsPerEuro.value > 5);
+              const offHost = (() => {
+                try {
+                  return officialRule?.pointsPerEuro.sourceUrl
+                    ? new URL(officialRule.pointsPerEuro.sourceUrl).hostname.replace(/^www\./, '')
+                    : 'official page';
+                } catch {
+                  return 'official page';
+                }
+              })();
+              return (
+                <div
+                  key={i}
+                  className="grid gap-3 rounded-xl bg-sand/60 p-3 sm:grid-cols-[1.4fr_1fr_1fr]"
                 >
-                  <NumberInput
+                  <Field id={`${p}-r${i}-cat`} label="On">
+                    <select
+                      id={`${p}-r${i}-cat`}
+                      value={r.category}
+                      onChange={(e) =>
+                        setRule(i, (x) => ({
+                          ...x,
+                          category: e.target.value as EarnRule['category'],
+                        }))
+                      }
+                      className={fieldClass}
+                    >
+                      <option value="all">Any purchase</option>
+                      {SPEND_CATEGORIES.map((k) => (
+                        <option key={k} value={k}>
+                          {CATEGORY_LABELS[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field
                     id={`${p}-r${i}-rate`}
-                    step={0.01}
-                    value={
-                      r.pointsPerEuro.value === null
-                        ? null
-                        : Number(r.pointsPerEuro.value.toFixed(4))
-                    }
-                    placeholder="Unknown"
-                    onChange={(v) => setRule(i, (x) => ({ ...x, pointsPerEuro: edit(v) }))}
-                  />
-                </Field>
-                <Field id={`${p}-r${i}-cap`} label="Monthly cap (€)" hint="Empty = no cap">
-                  <NumberInput
-                    id={`${p}-r${i}-cap`}
-                    value={r.monthlyCapEur?.value ?? null}
-                    placeholder="No cap"
-                    onChange={(v) =>
-                      setRule(i, (x) => ({ ...x, monthlyCapEur: userValue<number | null>(v) }))
-                    }
-                  />
-                </Field>
-                {c.earn.length > 1 ? (
-                  <button
-                    type="button"
-                    className="justify-self-start text-sm font-semibold text-danger sm:col-span-3"
-                    onClick={() =>
-                      onChange((x) => ({ ...x, earn: x.earn.filter((_, j) => j !== i) }))
+                    label="Points per €1"
+                    hint={
+                      r.pointsPerEuro.status === 'VERIFIED' ? 'From the official page' : undefined
                     }
                   >
-                    Remove this rate
-                  </button>
-                ) : null}
-              </div>
-            ))}
+                    <NumberInput
+                      id={`${p}-r${i}-rate`}
+                      step={0.01}
+                      value={
+                        r.pointsPerEuro.value === null
+                          ? null
+                          : Number(r.pointsPerEuro.value.toFixed(4))
+                      }
+                      placeholder="Unknown"
+                      onChange={(v) => setRule(i, (x) => ({ ...x, pointsPerEuro: edit(v) }))}
+                    />
+                  </Field>
+                  <Field id={`${p}-r${i}-cap`} label="Monthly cap (€)" hint="Empty = no cap">
+                    <NumberInput
+                      id={`${p}-r${i}-cap`}
+                      value={r.monthlyCapEur?.value ?? null}
+                      placeholder="No cap"
+                      onChange={(v) =>
+                        setRule(i, (x) => ({ ...x, monthlyCapEur: userValue<number | null>(v) }))
+                      }
+                    />
+                  </Field>
+                  {isOverridden && officialRule ? (
+                    <div
+                      role="status"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-xs text-ink sm:col-span-3"
+                    >
+                      <span>
+                        Official: <strong>{Number(offVal.toFixed(3))} per €1</strong> ({offHost}
+                        {officialRule.pointsPerEuro.checkedAt
+                          ? `, checked ${officialRule.pointsPerEuro.checkedAt}`
+                          : ''}
+                        ). You entered <strong>{Number(r.pointsPerEuro.value!.toFixed(3))}</strong>.
+                      </span>
+                      <button
+                        type="button"
+                        className="font-semibold text-sea-dark underline"
+                        onClick={() =>
+                          setRule(i, (x) => ({
+                            ...x,
+                            pointsPerEuro: structuredClone(officialRule.pointsPerEuro),
+                          }))
+                        }
+                      >
+                        Reset to official
+                      </button>
+                    </div>
+                  ) : null}
+                  {isHigh ? (
+                    <p
+                      role="status"
+                      className="rounded-lg border border-warn/30 bg-warn-soft px-3 py-1.5 text-xs text-warn sm:col-span-3"
+                    >
+                      Unusually high rate ({Number(r.pointsPerEuro.value!.toFixed(2))} per €1) —
+                      most Spanish cards earn between 0.2 and 1 per €1 on general spend.
+                    </p>
+                  ) : null}
+                  {c.earn.length > 1 ? (
+                    <button
+                      type="button"
+                      className="justify-self-start text-sm font-semibold text-danger sm:col-span-3"
+                      onClick={() =>
+                        onChange((x) => ({ ...x, earn: x.earn.filter((_, j) => j !== i) }))
+                      }
+                    >
+                      Remove this rate
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
             <Button
               type="button"
               variant="ghost"

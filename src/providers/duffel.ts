@@ -96,11 +96,19 @@ export function mapOffer(
       departAt: g.departing_at,
       arriveAt: g.arriving_at,
       carrier: g.marketing_carrier?.name ?? offer.owner?.name ?? 'Unknown carrier',
+      operatingCarrier: g.operating_carrier?.name,
+      cabin: g.passengers?.[0]?.cabin_class_marketing_name ?? g.passengers?.[0]?.cabin_class,
       flightNumber:
         `${g.marketing_carrier?.iata_code ?? ''} ${g.marketing_carrier_flight_number ?? ''}`.trim(),
       durationMin: isoDurationToMin(g.duration),
     })),
   }));
+
+  const firstSeg = offer.slices[0]?.segments[0];
+  const returnedCabin =
+    firstSeg?.passengers?.[0]?.cabin_class_marketing_name ?? firstSeg?.passengers?.[0]?.cabin_class;
+  const sandboxAirline =
+    offer.owner?.iata_code === 'ZZ' || /duffel airways/i.test(offer.owner?.name ?? '');
 
   return {
     id: `duffel-${offer.id}`,
@@ -108,6 +116,8 @@ export function mapOffer(
     legIndexes: journey.legIndexes,
     slices,
     cabin,
+    returnedCabin,
+    sandboxAirline,
     costLines: [
       {
         code: 'fare',

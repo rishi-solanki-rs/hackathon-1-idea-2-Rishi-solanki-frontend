@@ -51,6 +51,8 @@ export type Segment = {
   departAt: string;
   arriveAt: string;
   carrier: string;
+  operatingCarrier?: string;
+  cabin?: string;
   flightNumber: string;
   durationMin: number;
 };
@@ -87,6 +89,8 @@ export type FlightOption = {
   variation?: { dateShiftDays?: number; altOrigin?: string; altDestination?: string };
   fxStale?: boolean;
   offerRef?: string;
+  sandboxAirline?: boolean;
+  returnedCabin?: string;
   sourceLabel: string;
 };
 

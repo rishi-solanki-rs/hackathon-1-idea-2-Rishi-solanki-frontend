@@ -1,8 +1,19 @@
+import { fmtDate, MONTHS } from './fmt';
 import type { PlanResult } from './plan';
 
+export type ExplainSections = {
+  summary: string;
+  why: string[];
+  doNow: string[];
+  later: string[];
+  caveats: string[];
+};
+
 export type ExplainFacts = {
+  outcome: PlanResult['verdict']['outcome'];
   numbers: Set<string>;
   dates: Set<string>;
+  formattedDates: Set<string>;
   names: string[];
   text: string;
 };
@@ -76,6 +87,13 @@ export function planFacts(r: PlanResult, programName: (id: string) => string): E
   for (const c of r.newCards) if (c.applyBy) dates.add(c.applyBy);
   for (const a of r.allocation.assignments) if (a.postsOn) dates.add(a.postsOn);
   dates.delete('');
+  const formattedDates = new Set<string>();
+  for (const d of dates) {
+    const f = fmtDate(d);
+    formattedDates.add(f);
+    // Also allow without weekday, e.g. "8 Jan 2027"
+    formattedDates.add(f.replace(/^[A-Za-z]{3}\s+/, ''));
+  }
   const names = [
     ...new Set([
       ...r.allocation.assignments.map((a) => a.cardName ?? '').filter(Boolean),
@@ -94,29 +112,68 @@ export function planFacts(r: PlanResult, programName: (id: string) => string): E
     booking: [r.booking.headline, r.booking.detail],
     newCards: r.newCards.map((c) => c.reasons),
   });
-  return { numbers: nums, dates, names, text };
+  return { outcome: r.verdict.outcome, numbers: nums, dates, formattedDates, names, text };
 }
 
 const BANNED =
   /\b(guarantee[ds]?|definitely available|seat is available|seats are available|confirmed (seat|availability)|real (market )?price|live price|risk[- ]free|you will save|prices? will (drop|fall|go down|rise|go up)|will (get|be) cheaper)\b/i;
 
-/** Rejects any explanation that states a number, date or claim not present in the plan's facts. */
+const FIELD_DUMP =
+  /\b(pointsUsableNow|cashFareMinor|awardEconomicMinor|seatConfirmed|lowConfidenceReasons|eurPerPoint|lsbd|totalTargetPoints)\b/;
+
+const CASH_OUTCOMES = new Set(['BOOK_CASH_NOW', 'CASH_BETTER', 'INSUFFICIENT_BY_DEADLINE']);
+const HUMAN_DATE_RE = new RegExp(
+  `\\b(?:(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat)\\s+)?(\\d{1,2}\\s+(?:${MONTHS.join('|')})\\s+\\d{4})\\b`,
+  'g',
+);
+
+/** Rejects any explanation that states a number, date, field name, or verdict contradiction not present in the plan's facts. */
 export function checkExplanation(
   paragraphs: string[],
   facts: ExplainFacts,
   knownBrands: string[],
 ): { ok: true } | { ok: false; reason: string } {
-  if (!paragraphs.length || paragraphs.length > 6) return { ok: false, reason: 'wrong length' };
+  if (!paragraphs.length || paragraphs.length > 8) return { ok: false, reason: 'wrong length' };
   const all = paragraphs.join('\n');
   if (all.length > 2500) return { ok: false, reason: 'too long' };
+  if (FIELD_DUMP.test(all)) return { ok: false, reason: 'internal field name' };
   // "approval is not guaranteed" is a caveat we ask for, not a claim.
   const banned = all
     .replace(/\b(not|never|no|isn['’]t|aren['’]t)\s+(be\s+)?guarantee[ds]?\b/gi, ' ')
     .match(BANNED);
   if (banned) return { ok: false, reason: `unsupported claim "${banned[0].toLowerCase()}"` };
+
+  // Verdict consistency check on summary / text
+  const firstPara = paragraphs[0] ?? '';
+  if (CASH_OUTCOMES.has(facts.outcome)) {
+    const cleaned = firstPara.replace(
+      /\b(do not|don['’]t|not|never|instead of|rather than)\s+(use|book|redeem)\b/gi,
+      ' ',
+    );
+    if (
+      /\b(use (your )?(points|avios|miles)|book (the )?award|redeem (your )?(points|avios|miles)|points beat cash|points look worth it)\b/i.test(
+        cleaned,
+      )
+    ) {
+      return { ok: false, reason: 'contradicts cash verdict' };
+    }
+  } else if (facts.outcome === 'AWARD_WORTH_CHECKING') {
+    if (
+      /\b(paying cash is better|cash beats points|book the cash fare instead)\b/i.test(firstPara)
+    ) {
+      return { ok: false, reason: 'contradicts award verdict' };
+    }
+  }
+
   for (const d of all.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [])
     if (!facts.dates.has(d)) return { ok: false, reason: `unknown date ${d}` };
-  const stripped = all.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
+  for (const m of all.matchAll(HUMAN_DATE_RE)) {
+    const full = m[0].trim();
+    const short = m[1]!.trim();
+    if (!facts.formattedDates.has(full) && !facts.formattedDates.has(short))
+      return { ok: false, reason: `unknown date ${full}` };
+  }
+  const stripped = all.replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ').replace(HUMAN_DATE_RE, ' ');
   for (const raw of stripped.match(/€?\d[\d,]*(\.\d+)?%?/g) ?? []) {
     if (raw.endsWith('%')) return { ok: false, reason: `percentage ${raw}` };
     const n = norm(raw);
@@ -136,6 +193,27 @@ export function checkExplanation(
   return { ok: true };
 }
 
+/** Deterministic structured explanation used when AI is unavailable or rejected. */
+export function rulesSections(r: PlanResult): ExplainSections {
+  const summary = r.verdict.reasons[0] ?? 'See the calculated recommendation above.';
+  const why = r.verdict.reasons.slice(1);
+  const doNow = r.actions
+    .filter((a) => a.kind === 'do' || a.kind === 'verify')
+    .slice(0, 3)
+    .map((a) => `${a.when}: ${a.title}.`);
+  const later = r.actions
+    .filter((a) => a.kind === 'deadline' || a.kind === 'fallback')
+    .slice(0, 2)
+    .map((a) => `${a.when}: ${a.title}.`);
+  const caveats = [
+    ...(r.flights.provider === 'duffel_test'
+      ? ['Flight prices are from Duffel test mode (sandbox data, not real market fares).']
+      : ['Flight prices are labelled example fares.']),
+    ...(r.confidenceReasons.length ? r.confidenceReasons.slice(0, 3) : []),
+  ];
+  return { summary, why, doNow, later, caveats };
+}
+
 /** Deterministic explanation used when AI is unavailable or rejected. */
 export function rulesExplanation(r: PlanResult): string[] {
   const out = [...r.verdict.reasons];
@@ -144,7 +222,6 @@ export function rulesExplanation(r: PlanResult): string[] {
     .slice(0, 2)
     .map((a) => `${a.when}: ${a.title}.`);
   if (doNow.length) out.push(doNow.join(' '));
-  if (r.confidenceReasons.length)
-    out.push(`Confidence is ${r.verdict.confidence} because: ${r.confidenceReasons.join(' ')}`);
+  if (r.confidenceReasons.length) out.push(`Note: ${r.confidenceReasons.join(' ')}`);
   return out;
 }

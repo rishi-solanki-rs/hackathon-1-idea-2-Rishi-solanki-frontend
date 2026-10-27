@@ -21,10 +21,22 @@ export type FlightQuote = {
   ret?: string;
   totalMinor: number;
   carrier: string;
+  operatingCarrier?: string;
+  cabin?: string;
+  sandboxAirline?: boolean;
   stops: number;
   provenance: Provenance;
   offerRef?: string;
   expiresAt?: string;
+  slices?: {
+    from: string;
+    to: string;
+    departAt: string;
+    arriveAt: string;
+    durationMin: number;
+    flightNumber?: string;
+    stops: number;
+  }[];
 };
 
 export type FlightsSummary = {
@@ -73,6 +85,12 @@ export type PlanResult = {
   dailyCards: DailyCard[];
   newCards: NewCardSuggestion[];
   booking: BookingAdvice;
+  /** Three-line deterministic summary of the plan: have/need/gap, decision, and single next action. */
+  summary: {
+    haveNeedGap: string;
+    decision: string;
+    nextAction: string;
+  };
 };
 
 export type PlanInputs = {
@@ -280,6 +298,30 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
     confidenceReasons.push(
       'Some planned purchases are refundable: their points can be clawed back if refunded.',
     );
+  for (const c of profile.cards) {
+    const cat = input.cardOptions?.find((o) => o.id === c.catalogueId);
+    for (const r of c.earn) {
+      const off = cat?.earn.find((er) => er.category === r.category);
+      if (
+        off &&
+        off.pointsPerEuro.value !== null &&
+        r.pointsPerEuro.value !== null &&
+        Math.abs(r.pointsPerEuro.value - off.pointsPerEuro.value) > 1e-4
+      ) {
+        confidenceReasons.push(
+          `The earn rate for ${c.name} (${Number(r.pointsPerEuro.value.toFixed(3))} per €1) differs from the official rate (${Number(off.pointsPerEuro.value.toFixed(3))} per €1).`,
+        );
+      }
+      if (
+        r.pointsPerEuro.value !== null &&
+        ((r.category === 'all' && r.pointsPerEuro.value > 3) || r.pointsPerEuro.value > 5)
+      ) {
+        confidenceReasons.push(
+          `An unusually high earn rate (${Number(r.pointsPerEuro.value.toFixed(2))} per €1) was entered for ${c.name}.`,
+        );
+      }
+    }
+  }
   if (flights.status === 'unavailable') confidenceReasons.push('No live test fare was available.');
   if (flights.status === 'example')
     confidenceReasons.push(
@@ -338,6 +380,12 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
     cashIsBetter: verdict.outcome === 'CASH_BETTER',
     candidates: input.cardOptions ?? [],
   });
+  if (verdict.outcome === 'INSUFFICIENT_BY_DEADLINE' && award) {
+    const canClose = newCards.some((nc) => nc.status !== 'not_suitable' && nc.coversGap);
+    verdict.reasons.push(
+      `You have ${now.usable.toLocaleString('en-IE')} ${input.programName(target)} points. Your spending adds about ${earnedByLsbd.toLocaleString('en-IE')} by ${fmtDate(verdict.lsbd)}. This trip needs ${award.points.toLocaleString('en-IE')}. Gap: ${(gapAfterPlan ?? verdict.shortfall).toLocaleString('en-IE')}${canClose ? '.' : ', which no card or welcome offer can close in time, so book cash.'}`,
+    );
+  }
   const booking = bookingAdvice({
     today,
     earliestDepart: trip.earliestDepart,
@@ -347,7 +395,7 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
     quotes: flights.quotes,
   });
 
-  const result: Omit<PlanResult, 'actions'> = {
+  const baseResult: Omit<PlanResult, 'actions' | 'summary'> = {
     gapAfterPlan,
     affordability,
     dailyCards: dailyCardsFromAllocation(profile, allocation, target, usableRoutes),
@@ -374,11 +422,21 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
     assumptions,
     confidenceReasons,
   };
-  return { ...result, actions: buildActions(result, input) };
+  const actions = buildActions(baseResult, input);
+  const firstDo = actions.find((a) => a.kind === 'do' || a.kind === 'verify') ?? actions[0];
+  const progLabel = input.programName(target);
+  const summary = {
+    haveNeedGap: award
+      ? `You have ${now.usable.toLocaleString('en-IE')} ${progLabel} points (+${earnedByLsbd.toLocaleString('en-IE')} from planned spending by ${fmtDate(verdict.lsbd)}) · Trip needs ${award.points.toLocaleString('en-IE')}${award.source === 'ILLUSTRATIVE' ? ' (estimate)' : ''} · Gap: ${(gapAfterPlan ?? 0).toLocaleString('en-IE')}.`
+      : `You have ${now.usable.toLocaleString('en-IE')} ${progLabel} points (+${earnedByLsbd.toLocaleString('en-IE')} from planned spending by ${fmtDate(verdict.lsbd)}) · No award price to compare${input.awardNote ? ` (${input.awardNote})` : '.'}`,
+    decision: verdict.reasons[0] ?? 'Compare your options below.',
+    nextAction: firstDo ? `${firstDo.title} (${firstDo.when}).` : 'Review the steps below.',
+  };
+  return { ...baseResult, actions, summary };
 }
 
 export function buildActions(
-  r: Omit<PlanResult, 'actions'>,
+  r: Omit<PlanResult, 'actions' | 'summary'>,
   input: Pick<PlanInputs, 'programName' | 'programWebsite'>,
 ): Action[] {
   const a: Action[] = [];
@@ -533,8 +591,16 @@ export function buildActions(
     when: 'Always',
     title: 'Do not spend extra or buy points to close a gap',
   });
-  for (const m of r.missing.slice(0, 5))
-    a.push({ id: `missing-${m}`, kind: 'missing', when: 'When you can', title: `Add: ${m}` });
+  for (const m of r.missing.slice(0, 5)) {
+    const clean = m.startsWith('How many days after a purchase ')
+      ? `Tell us ${m.charAt(0).toLowerCase()}${m.slice(1)}: Edit card`
+      : m.startsWith('Monthly cap for ') || m.startsWith('Earn rate for ')
+        ? `Tell us the ${m.charAt(0).toLowerCase()}${m.slice(1)}: Edit card`
+        : m.startsWith('Your ')
+          ? `Tell us ${m.charAt(0).toLowerCase()}${m.slice(1)}: Edit points`
+          : `Tell us: ${m}`;
+    a.push({ id: `missing-${m}`, kind: 'missing', when: 'When you can', title: clean });
+  }
   if (v.fallback)
     a.push({
       id: 'fallback',

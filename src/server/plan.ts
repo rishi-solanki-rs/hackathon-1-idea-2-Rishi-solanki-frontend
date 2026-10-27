@@ -4,6 +4,7 @@ import type { AwardInput } from '@/domain/profile';
 import {
   PlanRequestSchema,
   PlanResponseSchema,
+  PlanResultSchema,
   type PlanRequest,
   type PlanResponse,
 } from '@/contracts/plan';
@@ -19,6 +20,7 @@ import { haversineKm } from '@/domain/bookingWindow';
 import { illustrativeAwardTaxesEur } from '@/providers/fixtures/fixtureFlights';
 import { estimateAwardPoints } from '@/domain/awardChart';
 import type { FlightProvider } from '@/providers/types';
+import { signPlan } from './explain';
 import { serverEnv, type ServerEnv } from './env';
 import { searchTripFares } from './flights';
 import { clientKey, errorResponse, okResponse, rateLimit, readJson, zodIssues } from './http';
@@ -106,7 +108,13 @@ export async function runPlan(req: PlanRequest, deps: PlanDeps = {}): Promise<Pl
     },
     AIRLINES,
   );
-  return PlanResponseSchema.parse({ ok: true, status: 'ok', data: result });
+  const parsed = PlanResultSchema.parse(result);
+  return PlanResponseSchema.parse({
+    ok: true,
+    status: 'ok',
+    data: parsed,
+    planToken: signPlan(parsed),
+  });
 }
 
 export async function handlePlanCompute(req: Request, deps: PlanDeps = {}) {

@@ -52,7 +52,7 @@ export function CompareTabs() {
             onClick={() => setTab(t.id)}
             className={cn(
               'min-h-11 rounded-full px-5 text-sm font-semibold',
-              tab === t.id ? 'bg-sea text-white' : 'text-ink-soft hover:text-ink',
+              tab === t.id ? 'bg-sea text-sea-ink' : 'text-ink-soft hover:text-ink',
             )}
           >
             {t.label}

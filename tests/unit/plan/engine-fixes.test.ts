@@ -379,4 +379,104 @@ describe('routes, new cards, daily cards', () => {
       expect(d.cardName).toBe(first.cardName);
     }
   });
+
+  it('regression: suggestNewCards uses the card’s sourced postingDelayDays when present and builds a month-by-month plan', () => {
+    const fastGold = {
+      ...CARD_CATALOGUE.find((c) => c.id === 'amex_es_gold')!,
+      id: 'fast_gold',
+      postingDelayDays: { value: 5, status: 'VERIFIED' as const },
+      welcome: undefined,
+    };
+    const slowGold = {
+      ...CARD_CATALOGUE.find((c) => c.id === 'amex_es_gold')!,
+      id: 'slow_gold',
+      postingDelayDays: { value: 60, status: 'VERIFIED' as const },
+      welcome: undefined,
+    };
+    const rFast = suggestNewCards({
+      today: TODAY,
+      needBy: '2027-01-05',
+      profile: profile({ monthly: [month('bills', 1200)] }),
+      target: 'iberia_club',
+      routes: ROUTES,
+      eurPerPoint: '0.010',
+      gap: 500,
+      cashIsBetter: false,
+      candidates: [fastGold],
+    });
+    const rSlow = suggestNewCards({
+      today: TODAY,
+      needBy: '2027-01-05',
+      profile: profile({ monthly: [month('bills', 1200)] }),
+      target: 'iberia_club',
+      routes: ROUTES,
+      eurPerPoint: '0.010',
+      gap: 500,
+      cashIsBetter: false,
+      candidates: [slowGold],
+    });
+    expect(rFast[0]!.months).toBeGreaterThan(rSlow[0]!.months);
+    expect(rFast[0]!.monthlyPlan.length).toBeGreaterThan(0);
+  });
+
+  it('owner MAD-SCL scenario: First class has no estimate, overriding official Aire rate lowers confidence, plain summary and gap message are present', () => {
+    const gold = card({
+      id: 'gold',
+      name: 'American Express Gold (Spain)',
+      catalogueId: 'amex_es_gold',
+      program: 'amex_mr_es',
+      rates: { all: 0.5, groceries: 0.2 },
+      delay: null,
+    });
+    const aireOverridden = card({
+      id: 'aire',
+      name: 'Iberia Aire (Iberia Cards)',
+      catalogueId: 'iberia_aire',
+      program: 'iberia_club',
+      rates: { all: 2, travel: 0.5 },
+      delay: null,
+    });
+    const r = computePlan(
+      base({
+        today: '2026-10-27',
+        trip: trip({
+          origin: 'MAD',
+          destination: 'SCL',
+          tripType: 'one_way',
+          earliestDepart: '2027-02-01',
+          latestDepart: '2027-03-01',
+          adults: 4,
+          cabin: 'first',
+        }),
+        profile: profile({
+          cards: [gold, aireOverridden],
+          balances: [{ program: 'iberia_club', kind: 'exact', points: 1200 }],
+          monthly: [month('groceries', 2000), month('transport', 200), month('fuel', 125)],
+          purchases: [
+            {
+              id: 'iphone',
+              label: 'iPhone',
+              category: 'shopping',
+              amountEur: 1200,
+              date: '2026-11-20',
+              necessity: 'flexible',
+              committed: false,
+              refundable: true,
+            },
+          ],
+        }),
+        award: null,
+        awardNote: 'Iberia sells no First class, so there is no award estimate for it.',
+        flights: flights(24590.44),
+        cardOptions: CARD_CATALOGUE,
+      }),
+      ['iberia_club'],
+    );
+    expect(r.confidenceReasons.join(' ')).toMatch(/official rate/i);
+    expect(r.summary.haveNeedGap).toMatch(/1,200/);
+    expect(r.summary.decision).toMatch(/€24,590/);
+    expect(r.summary.nextAction).toMatch(/Book the cash fare/);
+    expect(r.earnings.undated).toBe(0);
+    expect(r.earnings.dated.length).toBeGreaterThan(0);
+  });
 });

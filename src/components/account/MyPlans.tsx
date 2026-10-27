@@ -24,6 +24,28 @@ type Row = {
   };
 };
 
+function MyPlansSkeleton() {
+  return (
+    <div aria-busy="true" className="grid gap-3">
+      {Array.from({ length: 3 }, (_, i) => (
+        <Card
+          key={i}
+          className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="grid flex-1 gap-2">
+            <Skeleton className="h-5 w-44" />
+            <Skeleton className="h-4 w-64" />
+            <div className="flex gap-2">
+              <Skeleton className="h-5 w-28 rounded-full" />
+              <Skeleton className="h-5 w-32 rounded-full" />
+            </div>
+          </div>
+          <Skeleton className="size-10 rounded-full" />
+        </Card>
+      ))}
+    </div>
+  );
+}
 const VERDICT: Record<string, string> = {
   BOOK_CASH_NOW: 'Book the cash fare',
   AWARD_WORTH_CHECKING: 'Points look worth it',
@@ -58,7 +80,7 @@ export function MyPlans() {
     };
   }, [auth.userId]);
 
-  if (!auth.ready) return <Skeleton className="h-40" />;
+  if (!auth.ready) return <MyPlansSkeleton />;
   if (!auth.session)
     return (
       <Alert
@@ -70,7 +92,7 @@ export function MyPlans() {
       </Alert>
     );
   if (error && !rows) return <Alert kind="error" title={error} />;
-  if (!rows) return <Skeleton className="h-40" />;
+  if (!rows) return <MyPlansSkeleton />;
   if (!rows.length)
     return (
       <Alert

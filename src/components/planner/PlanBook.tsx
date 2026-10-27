@@ -57,7 +57,7 @@ function OfferBooking() {
   const [expiresAt, setExpiresAt] = useState(exp);
   const [phase, setPhase] = useState<Phase>({ kind: 'review' });
   const key = useRef(newKey());
-  const valid = /^off_[A-Za-z0-9]+$/.test(ref) && total.minor > 0;
+  const valid = /^(off_[A-Za-z0-9]+|fixture:[A-Za-z0-9_:.\-]+)$/.test(ref) && total.minor > 0;
 
   useEffect(() => {
     if (!valid) return;
@@ -167,6 +167,8 @@ function OfferBooking() {
         expiresAt={done ? undefined : expiresAt}
         fallback={{
           carrier: sp.get('carrier') ?? undefined,
+          from: sp.get('from') ?? undefined,
+          to: sp.get('to') ?? undefined,
           dep: sp.get('dep') ?? undefined,
           ret: sp.get('ret') ?? undefined,
         }}

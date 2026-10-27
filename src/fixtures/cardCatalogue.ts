@@ -30,6 +30,7 @@ const IBERIA_CARDS = 'https://www.iberiacards.es/tarjetas-personales/';
 const IBERIA_COMPARE =
   'https://www.iberiacards.es/blog/tu-tarjeta/aire-vs-icon-vs-icon-plus-vs-zenit/';
 const ZENIT = 'https://www.iberiacards.es/wp/iberia-zenit/';
+const REVOLUT_ES = 'https://www.revolut.com/es-ES/revpoints/';
 
 const v = <T>(value: T, sourceUrl: string): Sourced<T> => ({
   value,
@@ -156,6 +157,27 @@ export const CARD_CATALOGUE: CatalogueCard[] = [
       'Welcome: "up to 40,000 Avios" under the current campaign; spend conditions not stated, so not planned.',
     ],
     sourceUrl: ZENIT,
+  },
+  {
+    id: 'revolut_es',
+    name: 'Revolut (Spain, RevPoints)',
+    issuer: 'Revolut Bank UAB',
+    country: 'ES',
+    program: 'revolut_revpoints',
+    earn: [
+      {
+        category: 'all',
+        pointsPerEuro: { value: null, status: 'UNKNOWN' },
+        monthlyCapEur: { value: null, status: 'UNKNOWN' },
+      },
+    ],
+    annualFeeEur: { value: null, status: 'UNKNOWN' },
+    postingDelayDays: unknownDelay,
+    notes: [
+      'Earn rate depends on your Revolut plan (from 1 RevPoint per €10 on Standard up to 1 per €1 on Ultra); enter your plan’s rate below.',
+      'Transferring RevPoints to Iberia Club requires an eligible plan; check your Revolut app.',
+    ],
+    sourceUrl: REVOLUT_ES,
   },
 ];
 

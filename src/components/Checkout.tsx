@@ -5,14 +5,16 @@ import { CheckCircle2, FlaskConical, Loader2 } from 'lucide-react';
 import {
   RepriceResponseSchema,
   TestOrderResponseSchema,
+  type ItineraryDto,
   type TestOrderResponse,
 } from '@/contracts/booking';
 import type { OptionDto } from '@/contracts/search';
 import type { Money } from '@/domain/money';
+import { Ticket, itineraryFromOption } from './booking/Ticket';
 import { Alert, Badge, Button, ButtonLink, Card } from './ui';
 import { eur } from './format';
 import { OptionPage } from './results/OptionPage';
-import { Itinerary, optionTitle } from './results/OptionSummary';
+import { optionTitle } from './results/OptionSummary';
 
 type Phase =
   | { kind: 'review' }
@@ -40,6 +42,7 @@ async function post(url: string, body: unknown) {
 function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'review' });
   const [total, setTotal] = useState<Money>(o.cashToday);
+  const [itinerary, setItinerary] = useState<ItineraryDto>(() => itineraryFromOption(o));
   const key = useRef<string>('');
 
   async function confirm(confirmTotal: Money, checkOnly = false) {
@@ -63,6 +66,7 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
         kind: 'error',
         message: rp.json?.error?.message ?? 'Could not check the price.',
       });
+    if (parsed.data.data.itinerary) setItinerary(parsed.data.data.itinerary);
     if (parsed.data.data.priceChanged) {
       setTotal(parsed.data.data.total);
       return setPhase({ kind: 'price_changed', from: confirmTotal, to: parsed.data.data.total });
@@ -108,43 +112,41 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
 
   if (phase.kind === 'done')
     return (
-      <Card className="border-sea p-6">
-        <Badge tone="warn">
-          <FlaskConical aria-hidden className="size-3" /> {phase.order.label}
-        </Badge>
-        <h1 className="mt-3 flex items-center gap-2 font-display text-2xl sm:text-3xl">
-          <CheckCircle2 aria-hidden className="size-7 text-saving" /> Test booking created
-        </h1>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-ink-muted">Test reference</dt>
-            <dd className="font-mono text-lg font-semibold">{phase.order.reference}</dd>
-          </div>
-          <div>
-            <dt className="text-ink-muted">Mode</dt>
-            <dd className="font-semibold">
+      <div className="grid gap-5">
+        <div>
+          <Badge tone="warn">
+            <FlaskConical aria-hidden className="size-3" /> {phase.order.label}
+          </Badge>
+          <h1 className="mt-3 flex items-center gap-2 font-display text-2xl sm:text-3xl">
+            <CheckCircle2 aria-hidden className="size-7 text-saving" /> Test booking created
+          </h1>
+          <p className="mt-1 text-sm text-ink-soft">
+            Mode:{' '}
+            <strong>
               {phase.order.mode === 'SIMULATED'
                 ? 'Simulated (fixture fare)'
                 : 'Duffel test mode (sandbox airline)'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-ink-muted">Test total</dt>
-            <dd className="font-semibold tabular">{eur(phase.order.total)}</dd>
-          </div>
-          <div>
-            <dt className="text-ink-muted">Traveller</dt>
-            <dd className="font-semibold">{phase.order.passengers.join(', ')}</dd>
-          </div>
-        </dl>
-        <p className="mt-4 text-sm text-ink-soft">
-          No ticket was issued, no seat is held for you and no money was charged. To travel, book on
-          the airline’s or a travel agent’s site.
-        </p>
-        <ButtonLink href={backHref} variant="secondary" className="mt-5">
-          Back to results
-        </ButtonLink>
-      </Card>
+            </strong>
+          </p>
+        </div>
+
+        <Ticket
+          itinerary={phase.order.itinerary ?? itinerary}
+          total={phase.order.total}
+          passengers={phase.order.passengers}
+          reference={phase.order.reference}
+        />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-soft">
+            No ticket was issued, no seat is held for you and no money was charged. To travel, book
+            on the airline’s or a travel agent’s site.
+          </p>
+          <ButtonLink href={backHref} variant="secondary">
+            Back to results
+          </ButtonLink>
+        </div>
+      </div>
     );
 
   return (
@@ -159,37 +161,26 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
         This demonstrates the booking flow with a fictional traveller. No ticket is issued and no
         payment is taken. We never ask for card details.
       </Alert>
-      <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
-        <Card className="p-5">
-          <h2 className="font-display text-xl">Flights</h2>
-          <div className="mt-3">
-            <Itinerary o={o} />
+
+      <Ticket itinerary={itinerary} total={total} expiresAt={o.expiresAt} />
+
+      <Card className="p-4 sm:p-5">
+        <h2 className="font-display text-lg">Travellers (fictional, for the test)</h2>
+        <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-ink-muted">Names</dt>
+            <dd className="font-medium">Lucia Demo, Mateo Demo… (one per adult)</dd>
           </div>
-        </Card>
-        <Card className="p-5">
-          <h2 className="font-display text-xl">Travellers (fictional, for the test)</h2>
-          <dl className="mt-3 grid gap-2 text-sm">
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">Names</dt>
-              <dd className="text-right font-medium">
-                Example names (Lucia Demo, Mateo Demo…), one per adult
-              </dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">Email</dt>
-              <dd className="font-medium">example.com addresses only</dd>
-            </div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">Payment</dt>
-              <dd className="font-medium">Test balance (no card)</dd>
-            </div>
-          </dl>
-          <p className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
-            <span className="font-semibold">Test total</span>
-            <span className="font-display text-2xl tabular">{eur(total)}</span>
-          </p>
-        </Card>
-      </div>
+          <div>
+            <dt className="text-xs text-ink-muted">Email</dt>
+            <dd className="font-medium">example.com addresses only</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-ink-muted">Payment</dt>
+            <dd className="font-medium">Test balance (no card)</dd>
+          </div>
+        </dl>
+      </Card>
 
       {phase.kind === 'price_changed' ? (
         <Alert

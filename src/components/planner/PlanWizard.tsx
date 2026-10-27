@@ -44,9 +44,28 @@ export function PlanWizard() {
   const [errors, setErrors] = useState<FieldErrors>({});
   if (!hydrated)
     return (
-      <div aria-busy="true" className="grid gap-4">
-        <Skeleton className="h-10" />
-        <Skeleton className="h-96" />
+      <div aria-busy="true" className="grid gap-5">
+        <div className="grid grid-cols-5 gap-1.5">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Skeleton key={i} className="h-5" />
+          ))}
+        </div>
+        <Card className="grid gap-4 p-4 sm:p-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-3/4" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-14" />
+            <Skeleton className="h-14" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-14" />
+            <Skeleton className="h-14" />
+          </div>
+          <div className="flex justify-between pt-2">
+            <Skeleton className="h-11 w-24 rounded-full" />
+            <Skeleton className="h-11 w-36 rounded-full" />
+          </div>
+        </Card>
       </div>
     );
 
@@ -79,7 +98,7 @@ export function PlanWizard() {
         <SyncConflict />
         <Stepper step={step} onGo={go} maxReached={Math.max(step, firstBlocked)} />
         {step < 4 ? (
-          <Card className="p-4 sm:p-6">
+          <Card key={step} className="anim-rise p-4 sm:p-6">
             <h2 className="mb-5 font-display text-2xl">{TITLES[step]}</h2>
             {step === 0 ? <StepTrip d={d} /> : null}
             {step === 1 ? <StepCards d={d} /> : null}

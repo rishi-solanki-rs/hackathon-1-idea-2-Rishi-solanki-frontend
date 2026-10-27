@@ -112,7 +112,7 @@ function Step({
 }) {
   const head = (title: string, extra?: React.ReactNode) => (
     <div className="flex flex-wrap items-center gap-3">
-      <span className="grid size-8 place-items-center rounded-full bg-sea text-sm font-bold text-white">
+      <span className="grid size-8 place-items-center rounded-full bg-sea text-sm font-bold text-sea-ink">
         {n}
       </span>
       <h2 className="font-semibold">{title}</h2>

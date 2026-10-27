@@ -68,9 +68,9 @@ Hosted project: all 5 migrations are applied. Never run `db reset` against it.
 
 | Command | Network | What it proves |
 |---|---|---|
-| `pnpm verify` | None (MSW blocks every request) | Format, lint, types, 136 unit and integration tests (validation, new cards, booking window, AI guard), secret, env and encoding checks |
-| `pnpm build && pnpm check:bundle:local` | None | Production build; no server values in the browser bundle |
-| `pnpm exec playwright test` | Local server in **fixture** mode | 53 journeys × 3 viewports (360, 768, 1280) plus 5 smoke checks, light and dark, axe, no horizontal overflow; screenshots in `test-results/screens/` |
+| `pnpm verify` | None (MSW blocks every request) | Format, lint, types, 180 unit and integration tests (caps, delays, budget/reserve, official Iberia chart, HMAC signed plans, structured AI guard, booking reconcile), secret, env and encoding checks |
+| `pnpm build:e2e && pnpm check:bundle` | None | Production build with Supabase env blanked for deterministic E2E; no server values in the browser bundle |
+| `pnpm test:e2e` | Local server in **fixture** mode | 164 checks across 3 viewports (360, 768, 1280) + smoke, light and dark (Midnight Indigo `#282B4A` & Vanilla `#EEEBDA`), axe-core AA contrast, no horizontal overflow; screenshots in `test-results/screens/` |
 | `pnpm test:live` | **Real** Duffel, Gemini, Supabase | Real test offers → reprice → **Duffel TEST order**; Gemini explanation passes the guard; two real email accounts: A saves a profile and a plan, B cannot read or overwrite them, A logs out and in and gets them back; test users deleted afterwards |
 | `LIVE=1 BASE_URL=<url> pnpm exec playwright test tests/e2e/live-plan.spec.ts --project=desktop-1280` | **Real**, through the UI | Full wizard → Duffel fares → AI explanation → test booking |
 | `LIVE=1 BASE_URL=<url> node --env-file=.env.local node_modules/@playwright/test/cli.js test tests/e2e/live-account.spec.ts --project=desktop-1280` | **Real** Supabase, through the UI | Create account → build a plan → My plans shows it → log out → log in → still there; deletes its test user |

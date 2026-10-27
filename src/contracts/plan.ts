@@ -168,10 +168,26 @@ const FlightQuote = z.object({
   ret: z.string().optional(),
   totalMinor: Money,
   carrier: z.string(),
+  operatingCarrier: z.string().optional(),
+  cabin: z.string().optional(),
+  sandboxAirline: z.boolean().optional(),
   stops: z.number().int(),
   provenance: z.string(),
   offerRef: z.string().optional(),
   expiresAt: z.string().optional(),
+  slices: z
+    .array(
+      z.object({
+        from: z.string(),
+        to: z.string(),
+        departAt: z.string(),
+        arriveAt: z.string(),
+        durationMin: z.number(),
+        flightNumber: z.string().optional(),
+        stops: z.number().int(),
+      }),
+    )
+    .optional(),
 });
 
 export const PlanResultSchema = z.object({
@@ -325,9 +341,17 @@ export const PlanResultSchema = z.object({
       coversGap: z.boolean().nullable(),
       applyBy: z.string().nullable(),
       eligibility: z.array(z.string()),
+      monthlyPlan: z.array(z.string()).optional(),
       sourceUrl: z.string(),
     }),
   ),
+  summary: z
+    .object({
+      haveNeedGap: z.string(),
+      decision: z.string(),
+      nextAction: z.string(),
+    })
+    .optional(),
   booking: z.object({
     daysToDeparture: z.number(),
     haul: z.enum(['short', 'long', 'unknown']),
@@ -359,8 +383,17 @@ export const PlanResponseSchema = z.object({
   ok: z.literal(true),
   status: z.literal('ok'),
   data: PlanResultSchema,
+  planToken: z.string().optional(),
 });
 export type PlanResponse = z.infer<typeof PlanResponseSchema>;
+
+export const ExplainSectionsSchema = z.object({
+  summary: z.string(),
+  why: z.array(z.string()),
+  doNow: z.array(z.string()),
+  later: z.array(z.string()),
+  caveats: z.array(z.string()),
+});
 
 export const ExplainResponseSchema = z.object({
   ok: z.literal(true),
@@ -368,6 +401,7 @@ export const ExplainResponseSchema = z.object({
   data: z.object({
     source: z.enum(['ai', 'rules']),
     text: z.array(z.string()),
+    sections: ExplainSectionsSchema.optional(),
     model: z.string().nullable(),
     rejectedReason: z.string().nullable(),
     latencyMs: z.number(),

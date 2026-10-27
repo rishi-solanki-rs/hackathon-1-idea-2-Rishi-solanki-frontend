@@ -34,6 +34,7 @@ export type CardOption = {
   program: ProgramId;
   earn: EarnRule[];
   annualFeeEur: Sourced<number>;
+  postingDelayDays?: Sourced<number>;
   welcome?: WelcomeOffer;
   sourceUrl: string;
 };
@@ -62,6 +63,8 @@ export type NewCardSuggestion = {
   /** Latest date to apply for the suggestion to still work before your deadline. */
   applyBy: string | null;
   eligibility: string[];
+  /** Month-by-month breakdown of spending, welcome points and ordinary points. */
+  monthlyPlan: string[];
   sourceUrl: string;
 };
 
@@ -168,7 +171,9 @@ export function suggestNewCards(input: NewCardInput): NewCardSuggestion[] {
     const conv = conversionToTarget(c.program, target, routes);
     if (conv === 0) continue;
     const w = c.welcome;
-    const postDays = w ? Math.max(w.typicalPostingDays, STATEMENT_DAYS) : STATEMENT_DAYS;
+    const baseDelay =
+      c.postingDelayDays && known(c.postingDelayDays) ? c.postingDelayDays.value : STATEMENT_DAYS;
+    const postDays = w ? Math.max(w.typicalPostingDays, baseDelay) : baseDelay;
     const usableDays = daysBetween(addDays(today, APPROVAL_DAYS), addDays(needBy, -postDays));
     const months = Math.max(0, Math.floor(usableDays / PERIOD));
     const earnPerMonth = monthly.reduce(
@@ -267,6 +272,17 @@ export function suggestNewCards(input: NewCardInput): NewCardSuggestion[] {
         `It adds about ${extraPoints.toLocaleString('en-IE')} points, but your gap is ${gap.toLocaleString('en-IE')}.`,
       );
 
+    const shortCardName = c.name.split(' (')[0]!;
+    const monthlyPlan = Array.from({ length: Math.min(months, 10) }, (_, idx) => {
+      const mNum = idx + 1;
+      const wBonus = welcomeOk && w && mNum <= w.maxPeriods ? w.pointsPerPeriod : 0;
+      const parts = [
+        ...(wBonus > 0 ? [`+${wBonus.toLocaleString('en-IE')} welcome`] : []),
+        `+${earnPerMonth.toLocaleString('en-IE')} from spending`,
+      ];
+      return `Month ${mNum}: €${monthlySpendEur.toLocaleString('en-IE')} on ${shortCardName} → ${parts.join(' + ')}`;
+    });
+
     out.push({
       cardId: c.id,
       name: c.name,
@@ -282,6 +298,7 @@ export function suggestNewCards(input: NewCardInput): NewCardSuggestion[] {
       coversGap,
       applyBy,
       eligibility,
+      monthlyPlan,
       sourceUrl: w?.sourceUrl ?? c.sourceUrl,
     });
   }

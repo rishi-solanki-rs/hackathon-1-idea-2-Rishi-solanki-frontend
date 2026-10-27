@@ -20,15 +20,29 @@ const cheapestQuote = (opts: FlightOption[], directOnly: boolean): FlightQuote |
   usable.sort((a, b) => cashTotal(a).minor - cashTotal(b).minor);
   const o = usable[0];
   if (!o) return null;
+  const firstSeg = o.slices[0]?.segments[0];
+  const carrier = firstSeg?.carrier ?? 'Unknown';
   return {
     depart: o.slices[0]?.departAt.slice(0, 10) ?? '',
     ret: o.slices.length > 1 ? o.slices[o.slices.length - 1].departAt.slice(0, 10) : undefined,
     totalMinor: cashTotal(o).minor,
-    carrier: o.slices[0]?.segments[0]?.carrier ?? 'Unknown',
+    carrier,
+    operatingCarrier: firstSeg?.operatingCarrier,
+    cabin: o.returnedCabin ?? firstSeg?.cabin ?? o.cabin,
+    sandboxAirline: o.sandboxAirline ?? /duffel airways/i.test(carrier),
     stops: Math.max(0, ...o.slices.map((s) => s.segments.length - 1)),
     provenance: o.provenance,
     offerRef: o.offerRef,
     expiresAt: o.expiresAt,
+    slices: o.slices.map((s) => ({
+      from: s.from,
+      to: s.to,
+      departAt: s.departAt,
+      arriveAt: s.arriveAt,
+      durationMin: s.durationMin,
+      flightNumber: s.segments[0]?.flightNumber || undefined,
+      stops: Math.max(0, s.segments.length - 1),
+    })),
   };
 };
 

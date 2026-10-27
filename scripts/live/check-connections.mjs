@@ -53,7 +53,7 @@ const prompt = {
   contents: [{ role: 'user', parts: [{ text: 'Reply with the single word: ok' }] }],
   generationConfig: { maxOutputTokens: 20 },
 };
-for (const model of ['gemini-2.5-flash']) {
+for (const model of ['gemini-3.5-flash-lite', 'gemini-3.5-flash']) {
   await timed(`gemini generativelanguage ${model}`, async () => {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,

@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { ArrowDown, ChevronRight, Pencil, RefreshCw, Sparkles, Wallet } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import type { OptionDto, QuickSearchResponse } from '@/contracts/search';
 import { t } from '@/i18n/en';
 import { queryToQuick, type QuickParams } from '@/lib/query';
 import { useQuickResult } from '@/lib/useQuickResult';
 import { AvailabilityBadge, ProvenanceBadge } from '../Badges';
 import { QuickSearchForm } from '../QuickSearchForm';
-import { Alert, Badge, Button, ButtonLink, Card, Skeleton } from '../ui';
+import { Alert, Badge, Button, ButtonLink, Card, FlightLoader, Skeleton } from '../ui';
 import { airportLabel, eur, programName, pts } from '../format';
 import { Itinerary, optionTitle, priceLabel } from './OptionSummary';
 import { Explanation } from './Explanation';
@@ -31,7 +32,7 @@ export function ResultsView() {
       <Alert
         kind="warn"
         title="This search is incomplete"
-        action={<ButtonLink href="/">Start a new search</ButtonLink>}
+        action={<ButtonLink href="/compare">Start a new search</ButtonLink>}
       >
         <p>Some details are missing or invalid, so nothing was searched.</p>
         <ul className="mt-2 list-disc pl-5">
@@ -170,7 +171,7 @@ function Loaded({
           kind="info"
           title="No flights found for these dates"
           action={
-            <ButtonLink href="/" variant="secondary">
+            <ButtonLink href="/compare" variant="secondary">
               Change search
             </ButtonLink>
           }
@@ -333,12 +334,17 @@ function OptionCard({
 }) {
   const detail = `/results/detail?${query}&opt=${encodeURIComponent(o.id)}`;
   return (
-    <Card className={isBest ? 'border-sea ring-1 ring-sea/30' : ''}>
+    <Card
+      className={cn(
+        'transition-all duration-150 hover:-translate-y-0.5',
+        isBest ? 'border-sea ring-1 ring-sea/30' : 'hover:border-sea/50',
+      )}
+    >
       <div className="grid gap-4 p-4 sm:grid-cols-[1fr_auto] sm:p-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {o.rank ? (
-              <span className="grid size-7 place-items-center rounded-full bg-ink text-xs font-bold text-white">
+              <span className="grid size-7 place-items-center rounded-full bg-sea text-xs font-bold text-sea-ink">
                 {o.rank}
               </span>
             ) : null}
@@ -416,12 +422,26 @@ export function ResultsSkeleton({ label = 'Loading…' }: { label?: string }) {
   return (
     <div role="status" aria-live="polite" className="grid gap-4">
       <span className="sr-only">{label}</span>
-      <p aria-hidden className="text-sm font-medium text-ink-soft">
-        {label}
-      </p>
-      <Skeleton className="h-44" />
-      <Skeleton className="h-28" />
-      <Skeleton className="h-28" />
+      <FlightLoader label={label} />
+      <Card className="grid gap-4 p-5 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Skeleton className="h-5 w-40 rounded-full" />
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+        </div>
+      </Card>
+      <Card className="grid gap-3 p-5">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-14" />
+      </Card>
+      <Card className="grid gap-3 p-5">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-14" />
+      </Card>
     </div>
   );
 }

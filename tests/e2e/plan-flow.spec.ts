@@ -89,6 +89,12 @@ test.describe('Plan my trip: main journey', () => {
     await addCard(page, 'iberia_aire');
     await expect(page.getByRole('listitem').getByText('Iberia Aire (Iberia Cards)')).toBeVisible();
     await expect(page.getByText('Official source').first()).toBeVisible();
+    // Test overriding an official rate shows warning and one-tap reset
+    const rateInput = page.locator('#card-0-r0-rate');
+    await rateInput.fill('2');
+    await expect(page.getByText(/Official: 0\.333 per €1/)).toBeVisible();
+    await page.getByRole('button', { name: 'Reset to official' }).click();
+    await expect(page.getByText(/Official: 0\.333 per €1/)).toHaveCount(0);
     await page.getByLabel('Points appear after (days)').fill('30');
     await shot(page, 'plan-cards');
     await page.getByRole('button', { name: /Next: Points/ }).click();
@@ -114,6 +120,10 @@ test.describe('Plan my trip: main journey', () => {
     await buildWithExamples(page);
 
     const cards = page.getByRole('region', { name: 'Your cards' });
+    await expect(page.getByLabel('Your plan in short')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'What we used' })).toContainText(
+      'Iberia Aire (Iberia Cards)',
+    );
     await expect(cards).toContainText('Groceries');
     await expect(cards).toContainText('Iberia Aire');
     await expect(cards).toContainText('Should you get a new card?');

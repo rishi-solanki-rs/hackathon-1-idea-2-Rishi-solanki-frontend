@@ -3,66 +3,72 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-surface: #ffffff;
-  --color-ivory: #fbf7f0;
-  --color-sand: #f3ebdd;
-  --color-sand-deep: #e9dcc6;
-  --color-line: #e2d5bf;
-  --color-ink: #13233a;
-  --color-ink-soft: #46546a;
-  --color-ink-muted: #5f6b7d;
-  --color-sea: #1d5fa8;
-  --color-sea-dark: #154a85;
-  --color-sea-soft: #e4eef9;
-  --color-terracotta: #a23d18;
-  --color-terracotta-soft: #f8e6dc;
-  --color-olive: #5e6b2f;
-  --color-gold: #6f4e08;
-  --color-gold-soft: #f6ecd2;
-  --color-saving: #0b6e41;
-  --color-saving-soft: #e3f2ea;
-  --color-warn: #8a4b00;
-  --color-warn-soft: #fdf0dc;
-  --color-danger: #a61b13;
-  --color-danger-soft: #fbe5e3;
+  --color-surface: #faf8ef;
+  --color-ivory: #eeebda;
+  --color-sand: #e4e0cb;
+  --color-sand-deep: #d6d1b8;
+  --color-line: #c8c2a8;
+  --color-ink: #282b4a;
+  --color-ink-soft: #383c60;
+  --color-ink-muted: #484c70;
+  --color-sea: #282b4a;
+  --color-sea-dark: #1c1e36;
+  --color-sea-ink: #faf8ef;
+  --color-sea-soft: #e0dfec;
+  --color-terracotta: #963614;
+  --color-terracotta-soft: #f5e2d8;
+  --color-olive: #525e28;
+  --color-gold: #664705;
+  --color-gold-soft: #f2e6c7;
+  --color-saving: #0a683d;
+  --color-saving-soft: #dfefe6;
+  --color-warn: #7a4200;
+  --color-warn-soft: #faebd4;
+  --color-danger: #9e1911;
+  --color-danger-soft: #f8e1df;
 
   --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
-  --radius-card: 1rem;
-  --shadow-card: 0 1px 2px rgb(19 35 58 / 0.06), 0 6px 20px -8px rgb(19 35 58 / 0.12);
+  --radius-card: 1.25rem;
+  --shadow-card:
+    0 1px 2px rgb(40 43 74 / 0.05), 0 4px 12px -2px rgb(40 43 74 / 0.07),
+    0 16px 32px -12px rgb(40 43 74 / 0.1);
 }
 
 html {
   color-scheme: light;
 }
 
-/* Dark theme: night over the Mediterranean. Same token names, so every component follows. */
+/* Dark theme: Midnight Indigo (#1C1E36 / #282B4A) with Vanilla (#EEEBDA) text and primary buttons. */
 .dark {
   color-scheme: dark;
-  --color-surface: #141e2b;
-  --color-ivory: #0e1622;
-  --color-sand: #182434;
-  --color-sand-deep: #223146;
-  --color-line: #2c3c53;
-  --color-ink: #eef2f7;
-  --color-ink-soft: #c3ccd8;
-  --color-ink-muted: #a1acbb;
-  --color-sea: #2f74c2;
-  --color-sea-dark: #9cc8ff;
-  --color-sea-soft: #1a2c44;
-  --color-terracotta: #f09a76;
+  --color-surface: #282b4a;
+  --color-ivory: #1c1e36;
+  --color-sand: #212440;
+  --color-sand-deep: #32365c;
+  --color-line: #3e4370;
+  --color-ink: #eeebda;
+  --color-ink-soft: #dfdbc8;
+  --color-ink-muted: #c6c2ae;
+  --color-sea: #eeebda;
+  --color-sea-dark: #faf8ef;
+  --color-sea-ink: #1c1e36;
+  --color-sea-soft: #1e213b;
+  --color-terracotta: #f4a482;
   --color-terracotta-soft: #3a2018;
-  --color-olive: #b8c784;
-  --color-gold: #ecc977;
-  --color-gold-soft: #2f2711;
-  --color-saving: #5fd39b;
-  --color-saving-soft: #11301f;
-  --color-warn: #f4bd6b;
-  --color-warn-soft: #33260f;
-  --color-danger: #ff9b91;
-  --color-danger-soft: #3b1815;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px -8px rgb(0 0 0 / 0.6);
+  --color-olive: #c2d18e;
+  --color-gold: #f0cf80;
+  --color-gold-soft: #302812;
+  --color-saving: #6be0a6;
+  --color-saving-soft: #123321;
+  --color-warn: #f7c679;
+  --color-warn-soft: #352710;
+  --color-danger: #ff9f96;
+  --color-danger-soft: #3d1916;
+  --shadow-card:
+    0 1px 2px rgb(0 0 0 / 0.45), 0 6px 16px -4px rgb(0 0 0 / 0.5),
+    0 20px 40px -12px rgb(0 0 0 / 0.65);
 }
 
 body {
@@ -118,25 +124,36 @@ body {
 
 @keyframes ticket-in {
   from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.98);
+    transform: translateY(14px) scale(0.985);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
 .anim-ticket-in {
-  animation: ticket-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: ticket-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ticket-print {
+  0% {
+    transform: translateY(-14px) scale(0.98);
+  }
+  65% {
+    transform: translateY(2px) scale(1.004);
+  }
+  100% {
+    transform: none;
+  }
+}
+.anim-ticket-print {
+  animation: ticket-print 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes rise {
   from {
-    opacity: 0;
     transform: translateY(8px);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }

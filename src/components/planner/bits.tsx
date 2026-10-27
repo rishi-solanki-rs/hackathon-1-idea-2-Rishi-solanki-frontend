@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, type ReactNode } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Info } from 'lucide-react';
 import type { EvidenceStatus } from '@/domain/profile';
 import type { FieldErrors } from '@/lib/planValidation';
 import { cn } from '@/lib/cn';
@@ -29,8 +29,11 @@ export function Stepper({
   maxReached: number;
 }) {
   return (
-    <nav aria-label="Plan steps">
-      <ol className="flex gap-1.5">
+    <nav
+      aria-label="Plan steps"
+      className="rounded-2xl border border-line/80 bg-surface p-2 shadow-xs sm:p-3"
+    >
+      <ol className="flex gap-1 sm:gap-2">
         {STEPS.map((s, i) => {
           const done = i < step;
           const current = i === step;
@@ -42,22 +45,28 @@ export function Stepper({
                 disabled={i > maxReached}
                 aria-current={current ? 'step' : undefined}
                 aria-label={`Step ${i + 1}: ${s}${done ? ' (done)' : ''}`}
-                className="group flex w-full flex-col items-stretch gap-1.5 text-left disabled:cursor-not-allowed"
+                className="group flex w-full min-w-0 cursor-pointer flex-col items-stretch gap-1.5 rounded-xl p-0.5 text-left transition-colors hover:bg-sand/60 disabled:cursor-not-allowed disabled:hover:bg-transparent sm:p-1"
               >
                 <span
                   className={cn(
-                    'h-1.5 rounded-full',
-                    current ? 'bg-sea' : done ? 'bg-sea/60' : 'bg-line',
+                    'h-2 rounded-full transition-all duration-300',
+                    current ? 'bg-sea' : done ? 'bg-sea/65' : 'bg-line',
                   )}
                 />
                 <span
                   className={cn(
-                    'flex items-center gap-1 truncate text-xs font-semibold',
-                    current ? 'text-ink' : 'text-ink-muted',
+                    'flex min-w-0 items-center gap-1 text-xs font-semibold',
+                    current ? 'text-ink' : done ? 'text-ink-soft' : 'text-ink-muted',
                   )}
                 >
-                  {done ? <Check aria-hidden className="size-3.5 shrink-0 text-sea-dark" /> : null}
-                  {s}
+                  {done ? (
+                    <Check aria-hidden className="size-3.5 shrink-0 text-saving" />
+                  ) : (
+                    <span className="hidden shrink-0 font-mono text-[11px] opacity-75 sm:inline">
+                      {i + 1}.
+                    </span>
+                  )}
+                  <span className="truncate">{s}</span>
                 </span>
               </button>
             </li>
@@ -100,7 +109,7 @@ export function SourceBadge({
         target="_blank"
         rel="noopener noreferrer"
         title={`Checked ${checkedAt}`}
-        className="inline-flex rounded-full"
+        className="inline-flex rounded-full transition-transform hover:scale-105"
       >
         {badge}
         <span className="sr-only"> (opens the official source, checked {checkedAt})</span>
@@ -126,7 +135,7 @@ export function Field({
   const msg = useContext(ErrorsContext)[id];
   return (
     <div className={cn('min-w-0', className)}>
-      <label htmlFor={id} className="block text-sm font-semibold">
+      <label htmlFor={id} className="block text-sm font-semibold text-ink">
         {label}
       </label>
       {children}
@@ -184,7 +193,12 @@ export function NumberInput({
 }
 
 export function WhyBox({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-ink-soft">{children}</p>;
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl border border-line/80 bg-sand/50 px-3.5 py-2.5 text-sm text-ink-soft">
+      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-terracotta" />
+      <p>{children}</p>
+    </div>
+  );
 }
 
 export function Choice({
@@ -203,7 +217,7 @@ export function Choice({
   id?: string;
 }) {
   return (
-    <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3 has-[:checked]:border-sea has-[:checked]:bg-sea-soft">
+    <label className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface p-3.5 shadow-2xs transition-all duration-150 hover:border-sea/60 has-[:checked]:border-sea has-[:checked]:bg-sea-soft has-[:checked]:shadow-xs">
       <input
         id={id}
         type="radio"
@@ -214,7 +228,7 @@ export function Choice({
       />
       <span className="min-w-0">
         <span className="block text-sm font-semibold">{title}</span>
-        {help ? <span className="block text-sm text-ink-soft">{help}</span> : null}
+        {help ? <span className="mt-0.5 block text-sm text-ink-soft">{help}</span> : null}
       </span>
     </label>
   );

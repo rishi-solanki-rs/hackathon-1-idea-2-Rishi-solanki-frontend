@@ -2,7 +2,7 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
-import { RefreshCw, Ticket, XCircle } from 'lucide-react';
+import { ArrowRight, RefreshCw, Ticket as TicketIcon, XCircle } from 'lucide-react';
 import {
   PlanSearchRequestSchema,
   PlanSearchResponseSchema,
@@ -21,6 +21,23 @@ import { airportLabel, cityOf, dateOf, eur } from '../format';
 import { Explanation } from '../results/Explanation';
 import { ResultsSkeleton } from '../results/ResultsView';
 import { priceLabel } from '../results/OptionSummary';
+
+function bookLinkForOption(o: OptionDto): string | null {
+  if (o.kind !== 'cash' || !o.offerRef) return null;
+  const firstSlice = o.slices[0];
+  const lastSlice = o.slices[o.slices.length - 1];
+  const carrier = firstSlice?.segments[0]?.carrier ?? 'Flight';
+  const params = new URLSearchParams({
+    ref: o.offerRef,
+    total: String(o.cashToday.minor),
+    ...(firstSlice ? { dep: firstSlice.departAt.slice(0, 10), from: firstSlice.from } : {}),
+    ...(lastSlice ? { to: lastSlice.to } : {}),
+    ...(o.slices.length > 1 && lastSlice ? { ret: lastSlice.departAt.slice(0, 10) } : {}),
+    ...(o.expiresAt ? { exp: o.expiresAt } : {}),
+    carrier,
+  });
+  return `/plan/book?${params.toString()}`;
+}
 
 export function PlanResults() {
   const sp = useSearchParams();
@@ -113,6 +130,14 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
   const d = res.data;
   const byId = new Map(d.options.map((o) => [o.id, o]));
   const best = d.best;
+  const bestOptions = best
+    ? best.optionIds.map((id) => byId.get(id)).filter((o): o is OptionDto => !!o)
+    : [];
+  const hasDuffelFares =
+    res.status !== 'fixture_fallback' &&
+    bestOptions.some((o) => o.provenance === 'LIVE_TEST_DUFFEL');
+  const singleCombinedHref = bestOptions.length === 1 ? bookLinkForOption(bestOptions[0]!) : null;
+
   const diffText = (c: CombinationDto) => {
     if (!best?.ec || !c.ec) return '';
     const diff = c.ec.minor - best.ec.minor;
@@ -147,7 +172,11 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
         <Card className="overflow-hidden">
           <div className="grid md:grid-cols-[1.1fr_1fr]">
             <div className="p-5 sm:p-6">
-              <Badge tone="gold">Example result · illustrative data</Badge>
+              {hasDuffelFares ? (
+                <Badge tone="sea">Duffel test mode · sandbox fares</Badge>
+              ) : (
+                <Badge tone="gold">Example result · illustrative data</Badge>
+              )}
               <h2 className="mt-3 font-display text-3xl leading-tight">
                 {d.economicSaving && d.economicSaving.minor > 0 ? (
                   <>
@@ -159,6 +188,13 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                 )}
               </h2>
               <p className="mt-2 text-ink-soft">{d.explanation.summary}</p>
+              {singleCombinedHref ? (
+                <div className="mt-4">
+                  <ButtonLink href={singleCombinedHref}>
+                    Book this ticket (test) <ArrowRight aria-hidden className="size-4" />
+                  </ButtonLink>
+                </div>
+              ) : null}
             </div>
             <dl className="grid grid-cols-2 border-t border-line bg-sand/50 md:border-t-0 md:border-l">
               <div className="border-r border-line p-5">
@@ -192,15 +228,22 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
           <h2 id="chosen" className="font-display text-xl">
             Tickets to book
           </h2>
+          {bestOptions.length > 1 ? (
+            <Alert kind="warn" title={`Separate bookings (${bestOptions.length} tickets)`}>
+              Each ticket below is booked separately. Airlines do not protect connections between
+              separate bookings, so leave plenty of buffer time between flights.
+            </Alert>
+          ) : null}
           <ul className="grid gap-3">
-            {best.optionIds.map((id) => {
-              const o = byId.get(id)!;
+            {bestOptions.map((o, idx) => {
+              const href = bookLinkForOption(o);
               return (
-                <li key={id}>
-                  <Card className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <li key={o.id}>
+                  <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="flex items-center gap-2 font-semibold">
-                        <Ticket aria-hidden className="size-4 text-sea" />{' '}
+                        <TicketIcon aria-hidden className="size-4 text-sea" />{' '}
+                        {bestOptions.length > 1 ? `Ticket ${idx + 1}: ` : ''}
                         {o.kind === 'award'
                           ? 'Award'
                           : o.legIndexes.length > 1
@@ -211,11 +254,21 @@ function PlanLoaded({ res }: { res: PlanSearchResponse }) {
                       <p className="mt-1 text-sm text-ink-soft">
                         {o.slices.map((s) => `${dateOf(s.departAt)} ${s.from}→${s.to}`).join(' · ')}
                       </p>
-                      <div className="mt-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         <ProvenanceBadge p={o.provenance} />
+                        {bestOptions.length > 1 ? (
+                          <Badge tone="warn">Separate booking</Badge>
+                        ) : null}
                       </div>
                     </div>
-                    <p className="font-display text-xl tabular">{priceLabel(o)}</p>
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <p className="font-display text-xl tabular">{priceLabel(o)}</p>
+                      {href ? (
+                        <ButtonLink href={href} variant="secondary">
+                          Book this ticket (test) <ArrowRight aria-hidden className="size-4" />
+                        </ButtonLink>
+                      ) : null}
+                    </div>
                   </Card>
                 </li>
               );
