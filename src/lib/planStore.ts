@@ -37,7 +37,7 @@ export const emptyProfile = (): Profile => ({
   noPoints: false,
   monthly: [],
   purchases: [],
-  finance: { paysInFull: null, cashReserveEur: null },
+  finance: { paysInFull: null, cashReserveEur: null, tripBudgetEur: null },
   valuations: [],
 });
 
@@ -59,7 +59,7 @@ const initial = (): PlanDraft => ({
     bookBy: '',
   },
   profile: emptyProfile(),
-  award: { mode: 'none', program: 'iberia_club', points: '', taxesEur: '', seenAvailable: false },
+  award: { mode: 'none', program: '', points: '', taxesEur: '', seenAvailable: false },
   updatedAt: new Date(0).toISOString(),
 });
 

@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { fmtDate } from './fmt';
 import { conversionToTarget } from './cards';
 import { daysBetween } from './flexDates';
 import {
@@ -231,8 +232,9 @@ export function suggestNewCards(input: NewCardInput): NewCardSuggestion[] {
       );
     } else if (months < 1) {
       status = 'not_suitable';
+      const lead = APPROVAL_DAYS + PERIOD + postDays;
       reasons.unshift(
-        `Not enough time: a new card needs about ${APPROVAL_DAYS + PERIOD + postDays} days before you need the points.`,
+        `Not enough time: you would have needed to apply by ${fmtDate(addDays(needBy, -lead))} (about ${lead} days before you need the points, ${fmtDate(needBy)}).`,
       );
     } else if (extraPoints === 0) {
       status = 'not_suitable';
@@ -249,14 +251,21 @@ export function suggestNewCards(input: NewCardInput): NewCardSuggestion[] {
     } else if (coversGap && gap! > 0 && applyBy) {
       status = 'good_fit';
       reasons.unshift(
-        `Could close your ${gap!.toLocaleString('en-IE')}-point gap if you apply by ${applyBy}.`,
+        `Could close your ${gap!.toLocaleString('en-IE')}-point gap if you apply by ${fmtDate(applyBy!)}.`,
       );
     } else if (welcomeOk && (netValueEur ?? 0) > 0) {
       status = 'good_fit';
       reasons.unshift('Your regular spending already meets the welcome offer minimum.');
     }
-    if (status !== 'not_suitable' && fee === null)
+    if (status !== 'not_suitable' && fee === null) {
+      // Without the fee the value cannot be judged, so it is never more than "possible".
+      if (status === 'good_fit') status = 'possible';
       reasons.push('Annual fee not checked on the official page, so it is not subtracted.');
+    }
+    if (status !== 'not_suitable' && gap && gap > 0 && !coversGap)
+      reasons.push(
+        `It adds about ${extraPoints.toLocaleString('en-IE')} points, but your gap is ${gap.toLocaleString('en-IE')}.`,
+      );
 
     out.push({
       cardId: c.id,

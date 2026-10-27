@@ -77,6 +77,67 @@ describe('LIVE: Duffel test mode + plan + Gemini (real network)', () => {
     expect(order.data.reference).toMatch(/\w+/);
   });
 
+  it('books 4 adults as 4 distinct fictional travellers, with the full itinerary, and finds the order by key', async () => {
+    const res = await runPlan({
+      trip: {
+        origin: 'MAD',
+        destination: 'LHR',
+        tripType: 'one_way',
+        earliestDepart: day(45),
+        latestDepart: day(45),
+        adults: 4,
+        cabin: 'economy',
+        objective: 'B_ECONOMIC_COST',
+      },
+      profile: {
+        cards: [],
+        noCards: true,
+        balances: [],
+        noPoints: true,
+        monthly: [],
+        purchases: [],
+        finance: { paysInFull: true },
+        valuations: [],
+      },
+      award: null,
+      estimateAward: false,
+      useExample: false,
+    });
+    const q = (res.data as unknown as PlanResult).flights.cheapest!;
+    expect(q.offerRef).toMatch(/^off_/);
+    const rp = await reprice({
+      offerRef: q.offerRef!,
+      quotedTotal: { minor: q.totalMinor, currency: 'EUR' },
+      expiresAt: q.expiresAt,
+    });
+    expect(rp.data.itinerary?.passengers).toBe(4);
+    expect(rp.data.itinerary?.slices[0]?.segments[0]?.flightNumber).toBeTruthy();
+    const key = crypto.randomUUID();
+    const order = await createTestOrder({
+      offerRef: q.offerRef!,
+      confirmTotal: rp.data.total,
+      expiresAt: q.expiresAt,
+      idempotencyKey: key,
+    });
+    console.log(
+      '4-adult order',
+      order.data.reference,
+      order.data.passengers.length,
+      rp.data.itinerary?.owner,
+    );
+    expect(order.data.passengers).toHaveLength(4);
+    expect(new Set(order.data.passengers).size).toBe(4);
+    const { findDuffelOrderByKey } = await import('@/providers/duffel');
+    const env = serverEnv();
+    const found = await findDuffelOrderByKey(
+      { token: env.DUFFEL_ACCESS_TOKEN!, fx: async () => [] },
+      q.offerRef!,
+      key,
+      AbortSignal.timeout(10_000),
+    );
+    expect(found?.bookingReference).toBe(order.data.reference);
+  });
+
   it('gets a validated Gemini explanation, or an honest rules fallback with a reason', async () => {
     const e = await explainPlan(plan);
     console.log('explain', e.source, e.model, e.rejectedReason, `${e.latencyMs}ms`);

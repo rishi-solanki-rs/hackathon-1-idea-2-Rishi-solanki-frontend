@@ -21,6 +21,7 @@ export type SpendUnit = {
   date: string;
   currentCardId?: string;
   kind: 'monthly' | 'planned';
+  refundable?: boolean;
 };
 
 export type Assignment = {
@@ -31,9 +32,16 @@ export type Assignment = {
   program: ProgramId | null;
   targetPoints: number;
   postsOn: string | null;
+  /** The card's posting delay is unknown, so a conservative assumption was used for `postsOn`. */
+  postingAssumed: boolean;
   capped: boolean;
   reason: string;
+  /** Planned purchase that can be refunded: its points could be clawed back. */
+  refundable?: boolean;
 };
+
+/** Days after a purchase that card points are assumed to appear when the card's own rule is unknown (conservative). */
+export const ASSUMED_POSTING_DAYS = 45;
 
 export type ExcludedSpend = { id: string; label: string; reason: string };
 
@@ -120,7 +128,9 @@ export function spendUnits(
       category: p.category,
       amountEur: p.amountEur,
       date: p.date,
+      currentCardId: p.currentCardId,
       kind: 'planned',
+      refundable: p.refundable,
     });
   }
   units.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
@@ -138,57 +148,67 @@ export function conversionToTarget(
   return r ? r.num / r.den : 0;
 }
 
-type RateInfo = { rate: number; capEur: number | null; ruleCategory: SpendCategory | 'all' } | null;
+type Rule = { rate: number; cap: number | null | 'unknown'; category: SpendCategory | 'all' };
 
-function rateFor(card: UserCard, category: SpendCategory): RateInfo {
-  const specific = card.earn.find((r) => r.category === category && known(r.pointsPerEuro));
-  const base = card.earn.find((r) => r.category === 'all' && known(r.pointsPerEuro));
-  const rule = specific ?? base;
-  if (!rule || !known(rule.pointsPerEuro)) return null;
-  const cap = rule.monthlyCapEur;
-  return {
-    rate: rule.pointsPerEuro.value,
-    capEur: cap && known(cap) ? cap.value : null,
-    ruleCategory: rule.category,
-  };
+function ruleInfo(card: UserCard, category: SpendCategory | 'all'): Rule | null {
+  const r = card.earn.find((x) => x.category === category && known(x.pointsPerEuro));
+  if (!r || !known(r.pointsPerEuro)) return null;
+  const c = r.monthlyCapEur;
+  // No cap field, or an explicit empty cap, means "no cap". An UNKNOWN cap is never treated as unlimited.
+  const cap = !c
+    ? null
+    : c.status === 'UNKNOWN' || c.status === 'CONFLICTING'
+      ? 'unknown'
+      : c.value;
+  return { rate: r.pointsPerEuro.value, cap, category };
 }
-
-const baseRate = (card: UserCard) => {
-  const base = card.earn.find((r) => r.category === 'all' && known(r.pointsPerEuro));
-  return base && known(base.pointsPerEuro) ? base.pointsPerEuro.value : 0;
-};
 
 type CapState = Map<string, number>; // `${cardId}|${ruleCategory}|${yyyy-mm}` → euros used
 const capKey = (cardId: string, cat: string, date: string) =>
   `${cardId}|${cat}|${date.slice(0, 7)}`;
 
-/** Points a card earns on a unit given cap usage so far (overflow earns the base rate). */
-function earn(
-  card: UserCard,
-  unit: SpendUnit,
-  caps: CapState,
-): { points: number; capped: boolean; capUse: number; ruleCategory: string } {
-  const info = rateFor(card, unit.category);
-  if (!info) return { points: 0, capped: false, capUse: 0, ruleCategory: 'none' };
-  if (info.capEur === null)
-    return {
-      points: floorPts(unit.amountEur * info.rate),
-      capped: false,
-      capUse: 0,
-      ruleCategory: info.ruleCategory,
-    };
-  const used = caps.get(capKey(card.id, info.ruleCategory, unit.date)) ?? 0;
-  const room = Math.max(0, info.capEur - used);
-  const atRate = Math.min(room, unit.amountEur);
-  const overflow = unit.amountEur - atRate;
-  const overflowRate = info.ruleCategory === 'all' ? 0 : baseRate(card);
-  return {
-    points: floorPts(atRate * info.rate + overflow * overflowRate),
-    capped: overflow > 0,
-    capUse: atRate,
-    ruleCategory: info.ruleCategory,
+type Earned = { points: number; capped: boolean; uses: { key: string; eur: number }[] };
+
+/**
+ * Points a card earns on a unit given cap usage so far.
+ * - Spend within a category's cap earns the category rate.
+ * - Spend over it earns min(category rate, base rate) and counts against the base rule's own cap.
+ * - An unknown category cap is treated as 0 (conservative); an unknown base cap as no cap (reported as missing).
+ */
+function earn(card: UserCard, unit: SpendUnit, caps: CapState): Earned {
+  const base = ruleInfo(card, 'all');
+  const spec = ruleInfo(card, unit.category);
+  const uses: Earned['uses'] = [];
+  const room = (r: Rule, cat: string) => {
+    if (r.cap === null || r.cap === 'unknown')
+      return r.cap === 'unknown' && cat !== 'all' ? 0 : Infinity;
+    return Math.max(0, r.cap - (caps.get(capKey(card.id, cat, unit.date)) ?? 0));
   };
+  const atBase = (amount: number, rate: number) => {
+    if (!base || amount <= 0) return { pts: 0, over: amount > 0 };
+    const r = room(base, 'all');
+    const take = Math.min(r, amount);
+    if (Number.isFinite(r) && take > 0)
+      uses.push({ key: capKey(card.id, 'all', unit.date), eur: take });
+    return { pts: take * rate, over: take < amount };
+  };
+  if (!spec) {
+    if (!base) return { points: 0, capped: false, uses };
+    const b = atBase(unit.amountEur, base.rate);
+    return { points: floorPts(b.pts), capped: b.over, uses };
+  }
+  const r = room(spec, spec.category);
+  const atRate = Math.min(r, unit.amountEur);
+  if (Number.isFinite(r) && atRate > 0)
+    uses.push({ key: capKey(card.id, spec.category, unit.date), eur: atRate });
+  const overflow = unit.amountEur - atRate;
+  const b = atBase(overflow, base ? Math.min(base.rate, spec.rate) : 0);
+  return { points: floorPts(atRate * spec.rate + b.pts), capped: overflow > 0, uses };
 }
+
+const consumeCaps = (caps: CapState, e: Earned) => {
+  for (const u of e.uses) caps.set(u.key, (caps.get(u.key) ?? 0) + u.eur);
+};
 
 export function allocate(
   profile: Profile,
@@ -221,12 +241,23 @@ export function allocate(
   const cards = profile.cards;
   for (const c of cards) {
     if (!c.earn.some((r) => known(r.pointsPerEuro))) missing.push(`Earn rate for ${c.name}`);
-    if (!known(c.postingDelayDays)) missing.push(`When ${c.name} posts points`);
+    if (!known(c.postingDelayDays))
+      missing.push(`How many days after a purchase ${c.name} points appear`);
+    for (const r of c.earn)
+      if (
+        r.monthlyCapEur &&
+        (r.monthlyCapEur.status === 'UNKNOWN' || r.monthlyCapEur.status === 'CONFLICTING')
+      )
+        missing.push(
+          `Monthly cap for ${c.name} (${r.category === 'all' ? 'any purchase' : r.category})`,
+        );
     if (conversionToTarget(c.program, target, routes) === 0)
       missing.push(`${c.name} earns points that cannot reach this trip's programme`);
   }
   const conv = new Map(cards.map((c) => [c.id, conversionToTarget(c.program, target, routes)]));
-  const delay = (c: UserCard) => (known(c.postingDelayDays) ? c.postingDelayDays.value : null);
+  const delay = (c: UserCard) =>
+    known(c.postingDelayDays) ? c.postingDelayDays.value : ASSUMED_POSTING_DAYS;
+  const assumed = (c: UserCard) => !known(c.postingDelayDays);
 
   // Greedy: biggest units first to the card with the most target points (cap-aware).
   const caps: CapState = new Map();
@@ -249,16 +280,14 @@ export function allocate(
         program: null,
         targetPoints: 0,
         postsOn: null,
+        postingAssumed: false,
         capped: false,
         reason: 'None of your cards earns points usable for this trip on this purchase',
+        refundable: u.refundable,
       });
       continue;
     }
-    if (best.e.capUse > 0) {
-      const k = capKey(best.card.id, best.e.ruleCategory, u.date);
-      caps.set(k, (caps.get(k) ?? 0) + best.e.capUse);
-    }
-    const d = delay(best.card);
+    consumeCaps(caps, best.e);
     chosen.set(u.id, {
       unit: u,
       cardId: best.card.id,
@@ -266,11 +295,13 @@ export function allocate(
       points: best.e.points,
       program: best.card.program,
       targetPoints: best.tp,
-      postsOn: d === null ? null : addDays(u.date, d),
+      postsOn: addDays(u.date, delay(best.card)),
+      postingAssumed: assumed(best.card),
       capped: best.e.capped,
       reason: best.e.capped
-        ? 'Highest earn rate until its monthly cap, base rate after'
+        ? 'Highest earn rate until its monthly cap, lower rate after'
         : 'Earns the most points usable for this trip',
+      refundable: u.refundable,
     });
   }
 
@@ -303,16 +334,17 @@ export function allocate(
         cardName: c.name,
         reached: true,
         points: bonusTarget,
-        postsOn: reachedOn && delay(c) !== null ? addDays(reachedOn, delay(c)!) : null,
+        postsOn: reachedOn ? addDays(reachedOn, delay(c)) : null,
         reason: 'Already reached with the planned allocation',
       });
       continue;
     }
     const candidates = inWindow.filter((u) => chosen.get(u.id)?.cardId !== c.id);
     const need = b.thresholdEur.value - have;
+    // Bonus moves respect the card's monthly caps as already used by the greedy allocation.
     const loss = (u: SpendUnit) =>
       (chosen.get(u.id)?.targetPoints ?? 0) -
-      floorPts(earn(c, u, new Map()).points * (conv.get(c.id) ?? 0));
+      floorPts(earn(c, u, caps).points * (conv.get(c.id) ?? 0));
     const pick = minimalLossSubset(candidates, need, loss);
     if (pick.approximate) approximate = true;
     if (!pick.units) {
@@ -339,8 +371,8 @@ export function allocate(
       continue;
     }
     for (const u of pick.units) {
-      const e = earn(c, u, new Map());
-      const d = delay(c);
+      const e = earn(c, u, caps);
+      consumeCaps(caps, e);
       chosen.set(u.id, {
         unit: u,
         cardId: c.id,
@@ -348,9 +380,11 @@ export function allocate(
         points: e.points,
         program: c.program,
         targetPoints: floorPts(e.points * (conv.get(c.id) ?? 0)),
-        postsOn: d === null ? null : addDays(u.date, d),
+        postsOn: addDays(u.date, delay(c)),
+        postingAssumed: assumed(c),
         capped: e.capped,
         reason: `Moved here to reach the ${c.name} sign-up bonus with spending you already planned`,
+        refundable: u.refundable,
       });
     }
     const reachedOn = cumulativeDate(
@@ -362,7 +396,7 @@ export function allocate(
       cardName: c.name,
       reached: true,
       points: bonusTarget,
-      postsOn: reachedOn && delay(c) !== null ? addDays(reachedOn, delay(c)!) : null,
+      postsOn: reachedOn ? addDays(reachedOn, delay(c)) : null,
       reason: 'Reached by moving already-planned purchases; no extra spending',
     });
   }
@@ -378,11 +412,7 @@ export function allocate(
     const card = cards.find((c) => c.id === u.currentCardId);
     if (!card) continue;
     const e = earn(card, u, baseCaps);
-    if (e.capUse > 0)
-      baseCaps.set(
-        capKey(card.id, e.ruleCategory, u.date),
-        (baseCaps.get(capKey(card.id, e.ruleCategory, u.date)) ?? 0) + e.capUse,
-      );
+    consumeCaps(baseCaps, e);
     baselineTargetPoints += floorPts(e.points * (conv.get(card.id) ?? 0));
   }
   return {

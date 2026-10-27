@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { supabase, useAuth } from '@/lib/auth';
+import { deletePlanRow } from '@/lib/accountData';
 import { Alert, Badge, Button, ButtonLink, Card, Skeleton } from '../ui';
 import { cityOf } from '../format';
 
@@ -68,7 +69,7 @@ export function MyPlans() {
         Plans you build while logged in are saved here automatically.
       </Alert>
     );
-  if (error) return <Alert kind="error" title={error} />;
+  if (error && !rows) return <Alert kind="error" title={error} />;
   if (!rows) return <Skeleton className="h-40" />;
   if (!rows.length)
     return (
@@ -83,6 +84,11 @@ export function MyPlans() {
 
   return (
     <ul className="grid gap-3">
+      {error ? (
+        <li>
+          <Alert kind="error" title={error} />
+        </li>
+      ) : null}
       {rows.map((r) => (
         <li key={r.id}>
           <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -109,7 +115,11 @@ export function MyPlans() {
               variant="ghost"
               aria-label="Delete this saved plan"
               onClick={async () => {
-                await supabase()?.from('plans').delete().eq('id', r.id);
+                const sb = supabase();
+                if (!sb) return;
+                const res = await deletePlanRow(sb, r.id);
+                if (!res.ok) return setError(res.message);
+                setError(null);
                 setRows((x) => x?.filter((y) => y.id !== r.id) ?? null);
               }}
             >

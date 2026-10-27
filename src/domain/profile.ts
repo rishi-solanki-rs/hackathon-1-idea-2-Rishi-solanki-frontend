@@ -85,12 +85,18 @@ export type PlannedPurchase = {
   date: string;
   necessity: 'necessary' | 'flexible';
   committed: boolean;
+  /** Can be returned for a refund; card points may then be clawed back. */
   refundable: boolean;
+  /** Card the user would pay with today (for the "versus how you pay today" comparison). */
+  currentCardId?: string;
 };
 
 export type Finance = {
   paysInFull: boolean | null;
+  /** Cash the user must keep after paying for the trip. */
   cashReserveEur?: number | null;
+  /** Cash available for this trip (fare or award taxes). */
+  tripBudgetEur?: number | null;
   answered?: boolean;
 };
 

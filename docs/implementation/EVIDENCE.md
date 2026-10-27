@@ -1,5 +1,28 @@
 # Implementation evidence (A Una Milla)
 
+## Round 4 — 27 Oct 2026 ~16:20 IST (master fix plan: booking, engine, account safety)
+
+**Fixed (each with a regression test)**
+- Booking with more than one adult failed: Duffel rejected duplicate example names (`duplicate_passenger_names`), shown as "did not respond". Now one distinct example traveller per adult; provider 4xx → `BOOKING_REJECTED` (422) with a plain message.
+- Order timeout: the outcome is `OUTCOME_UNKNOWN` (504) until reconciled. Every order carries `metadata.aum_key`; the server looks the order up before any POST and after a lost response, and never blindly resubmits. "Check again" only looks up.
+- The price shown is the price paid: one repriced offer snapshot is used for both.
+- Stale booking page (book A, open B, still saw A): the booking view is keyed by the offer URL.
+- Boarding-pass ticket (`Ticket.tsx`) with airline, flights, times, cabin, bags, refund/change and the total.
+- Award estimates only for a programme the user picks; only Iberia Club with the official distance-band chart (no First, peak price with off-peak range). The 596,000-Avios First estimate is gone.
+- Category caps per product; unknown caps lower confidence instead of a universal cap; overflow earns the base rate, never more.
+- Card posting delay separate from transfer delay; expiry checked against the booking date; earnings dated.
+- Refundable purchases kept, flagged; trip budget separate from the cash reserve.
+- Supabase: sign-out clears local plan data (cross-account leak); saves/deletes check the result (no false success); conflict banner when browser and account answers differ; login `next` limited to same-site paths.
+- Card editor opens directly after adding a card.
+
+**Gates run**
+- `pnpm verify`: format, lint, typecheck, 173 unit/integration tests, secret/env/encoding checks — pass.
+- `pnpm build:e2e` (Supabase public values blanked; bundle scanned: no project ref) — pass.
+- Playwright desktop-1280 (plan-flow, booking, quick-flight, plan-and-wallet): 25/25 after updating two specs for the renamed award choice and the auto-open editor. Full mobile-360 suite incl. axe light/dark: 53 passed, 2 skipped (live-only).
+- Live Duffel test: 4-adult order created and found again by key.
+
+**Not done this round:** palette change to Midnight Indigo/Vanilla, multi-city booking, structured Gemini output.
+
 ## Round 3 — 27 Oct 2026 ~14:45 IST (minimal planner rebuild: login, recommendations, mobile-first UI)
 
 **Auth:** Supabase auth configured via the Management API (`scripts/live/configure-auth.mjs`, PATCH 200, then re-read): email sign-up on, autoconfirm on, anonymous off, password ≥ 8, site URL + redirect list. Access token local only.

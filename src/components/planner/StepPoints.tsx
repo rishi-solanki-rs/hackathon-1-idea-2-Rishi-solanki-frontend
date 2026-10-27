@@ -89,37 +89,52 @@ export function StepPoints({ d }: { d: PlanDraft }) {
 
       <fieldset className="grid gap-2">
         <legend className="mb-1 text-sm font-semibold">
-          Have you seen an award price for this trip?
+          Compare with an award (points) price?
         </legend>
         <Choice
           name="award-mode"
-          checked={award.mode !== 'entered'}
+          checked={award.mode === 'none'}
+          onChange={() => setAward({ mode: 'none' })}
+          title="No, cash only"
+          help="We still show which card to use and when to book."
+        />
+        <Choice
+          name="award-mode"
+          checked={award.mode === 'estimate'}
           onChange={() => setAward({ mode: 'estimate' })}
-          title="No, estimate it for me"
-          help="If you have points, we use a rough estimate, clearly labelled, so we can still compare points with cash."
+          title="Estimate it for me"
+          help="From the programme’s official award chart, clearly labelled as an estimate. Choose the programme below."
         />
         <Choice
           name="award-mode"
           checked={award.mode === 'entered'}
           onChange={() => setAward({ mode: 'entered' })}
-          title="Yes, I found one on the programme’s site"
+          title="I found an award price on the programme’s site"
         />
       </fieldset>
+      {award.mode === 'estimate' ? (
+        <Card className="grid gap-2 p-4">
+          <Field
+            id="aw-est-program"
+            label="Programme you would book with"
+            hint="We have an official chart for Iberia Club only; for others we say so instead of guessing."
+          >
+            <ProgramSelect
+              id="aw-est-program"
+              value={award.program}
+              onChange={(v) => setAward({ program: v })}
+            />
+          </Field>
+        </Card>
+      ) : null}
       {award.mode === 'entered' ? (
         <Card className="grid gap-4 p-4 sm:grid-cols-3">
           <Field id="aw-program" label="Programme">
-            <select
+            <ProgramSelect
               id="aw-program"
               value={award.program}
-              onChange={(e) => setAward({ program: e.target.value })}
-              className={fieldClass}
-            >
-              {PROGRAMS.filter((p) => p.kind === 'airline').map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setAward({ program: v })}
+            />
           </Field>
           <Field id="aw-points" label="Points (all travellers)">
             <input
@@ -172,6 +187,34 @@ export function StepPoints({ d }: { d: PlanDraft }) {
         </div>
       </details>
     </div>
+  );
+}
+
+function ProgramSelect({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const err = useErr(id);
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={fieldClass}
+      {...err}
+    >
+      <option value="">Choose a programme</option>
+      {PROGRAMS.filter((p) => p.kind === 'airline').map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.name}
+        </option>
+      ))}
+    </select>
   );
 }
 

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { Loader2, LogOut } from 'lucide-react';
 import { signIn, signOut, signUp, useAuth } from '@/lib/auth';
+import { safeNext } from '@/lib/accountData';
 import { Alert, Button, ButtonLink, Card, fieldClass } from '../ui';
 
 type Errors = { email?: string; password?: string; form?: string };
@@ -12,7 +13,7 @@ export function LoginForm() {
   const auth = useAuth();
   const router = useRouter();
   const sp = useSearchParams();
-  const next = sp.get('next') && sp.get('next')!.startsWith('/') ? sp.get('next')! : '/plan';
+  const next = safeNext(sp.get('next'));
   const [mode, setMode] = useState<'login' | 'signup'>(
     sp.get('mode') === 'signup' ? 'signup' : 'login',
   );

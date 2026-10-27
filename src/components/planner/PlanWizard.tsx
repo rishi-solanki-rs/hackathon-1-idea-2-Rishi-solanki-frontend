@@ -7,6 +7,7 @@ import { buildRequest } from '@/lib/planConvert';
 import { usePlanDraft, writePlan, type PlanDraft } from '@/lib/planStore';
 import { validateStep, type FieldErrors } from '@/lib/planValidation';
 import { useSync } from '@/lib/sync';
+import { SyncConflict } from '../account/SyncConflict';
 import { Button, Card, Skeleton } from '../ui';
 import { ErrorsContext, STEPS, Stepper } from './bits';
 import { StepTrip } from './StepTrip';
@@ -75,6 +76,7 @@ export function PlanWizard() {
   return (
     <ErrorsContext.Provider value={live}>
       <div className="grid gap-5">
+        <SyncConflict />
         <Stepper step={step} onGo={go} maxReached={Math.max(step, firstBlocked)} />
         {step < 4 ? (
           <Card className="p-4 sm:p-6">

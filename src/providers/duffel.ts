@@ -24,17 +24,25 @@ type DuffelOffer = {
     change_before_departure?: { allowed?: boolean } | null;
   };
   slices: {
-    origin: { iata_code: string };
-    destination: { iata_code: string };
+    origin: { iata_code: string; city_name?: string };
+    destination: { iata_code: string; city_name?: string };
     duration?: string;
+    fare_brand_name?: string;
     segments: {
-      origin: { iata_code: string };
-      destination: { iata_code: string };
+      origin: { iata_code: string; terminal?: string | null };
+      destination: { iata_code: string; terminal?: string | null };
       departing_at: string;
       arriving_at: string;
       duration?: string;
       marketing_carrier?: { name?: string; iata_code?: string };
       marketing_carrier_flight_number?: string;
+      operating_carrier?: { name?: string };
+      aircraft?: { name?: string } | null;
+      passengers?: {
+        cabin_class_marketing_name?: string;
+        cabin_class?: string;
+        baggages?: { type?: string; quantity?: number }[];
+      }[];
     }[];
   }[];
 };
@@ -170,7 +178,13 @@ async function call<T>(
       if (res.status === 404) throw new ProviderError('NOT_FOUND', 'Duffel offer not found');
       if (/expired|no_longer_available|offer_request_already_booked/.test(codes))
         throw new ProviderError('OFFER_EXPIRED', 'Duffel offer expired');
-      if (/price/.test(codes)) throw new ProviderError('PRICE_CHANGED', 'Duffel price changed');
+      if (/price_changed/.test(codes))
+        throw new ProviderError('PRICE_CHANGED', 'Duffel price changed');
+      // Any other 4xx is a definite refusal: nothing was created.
+      if (res.status >= 400 && res.status < 500) {
+        const code = errs[0]?.code ?? `http_${res.status}`;
+        throw new ProviderError('REJECTED', `Duffel rejected the request: ${code}`, { code });
+      }
       throw new ProviderError('UPSTREAM', `Duffel HTTP ${res.status}`);
     }
     return body as T;
@@ -220,13 +234,95 @@ export function createDuffelCashProvider(deps: Deps): FlightProvider {
   };
 }
 
+export type ItinerarySegment = {
+  from: string;
+  to: string;
+  departAt: string;
+  arriveAt: string;
+  durationMin: number;
+  flightNumber: string;
+  carrier: string;
+  operatingCarrier?: string;
+  aircraft?: string;
+  cabin?: string;
+  fromTerminal?: string;
+  toTerminal?: string;
+  checkedBags?: number;
+  carryOnBags?: number;
+};
+
+export type Itinerary = {
+  owner: string;
+  /** Duffel Airways (ZZ) is Duffel's own sandbox airline: schedules and prices are not real. */
+  sandboxAirline: boolean;
+  passengers: number;
+  baseAmount?: string;
+  taxAmount?: string;
+  currency: string;
+  refund: 'allowed' | 'not_allowed' | 'unknown';
+  change: 'allowed' | 'not_allowed' | 'unknown';
+  slices: {
+    from: string;
+    to: string;
+    fromCity?: string;
+    toCity?: string;
+    durationMin: number;
+    fareBrand?: string;
+    segments: ItinerarySegment[];
+  }[];
+};
+
 export type DuffelOfferSnapshot = {
   offerId: string;
   totalAmount: string;
   totalCurrency: string;
   expiresAt?: string;
   passengerIds: string[];
+  itinerary: Itinerary;
 };
+
+function bags(s: DuffelOffer['slices'][number]['segments'][number], type: string) {
+  const b = s.passengers?.[0]?.baggages?.filter((x) => x.type === type);
+  return b && b.length ? b.reduce((n, x) => n + (x.quantity ?? 0), 0) : undefined;
+}
+
+export function itineraryOf(o: DuffelOffer): Itinerary {
+  return {
+    owner: o.owner?.name ?? 'Unknown airline',
+    sandboxAirline: o.owner?.iata_code === 'ZZ',
+    passengers: o.passengers?.length ?? 0,
+    baseAmount: o.base_amount,
+    taxAmount: o.tax_amount,
+    currency: o.total_currency,
+    refund: cond(o.conditions?.refund_before_departure),
+    change: cond(o.conditions?.change_before_departure),
+    slices: (o.slices ?? []).map((s) => ({
+      from: s.origin.iata_code,
+      to: s.destination.iata_code,
+      fromCity: s.origin.city_name,
+      toCity: s.destination.city_name,
+      durationMin: isoDurationToMin(s.duration),
+      fareBrand: s.fare_brand_name,
+      segments: s.segments.map((g) => ({
+        from: g.origin.iata_code,
+        to: g.destination.iata_code,
+        departAt: g.departing_at,
+        arriveAt: g.arriving_at,
+        durationMin: isoDurationToMin(g.duration),
+        flightNumber:
+          `${g.marketing_carrier?.iata_code ?? ''} ${g.marketing_carrier_flight_number ?? ''}`.trim(),
+        carrier: g.marketing_carrier?.name ?? o.owner?.name ?? 'Unknown airline',
+        operatingCarrier: g.operating_carrier?.name,
+        aircraft: g.aircraft?.name,
+        cabin: g.passengers?.[0]?.cabin_class_marketing_name ?? g.passengers?.[0]?.cabin_class,
+        fromTerminal: g.origin.terminal ?? undefined,
+        toTerminal: g.destination.terminal ?? undefined,
+        checkedBags: bags(g, 'checked'),
+        carryOnBags: bags(g, 'carry_on'),
+      })),
+    })),
+  };
+}
 
 /** Fetches the latest price for an offer (used to reprice before a test order). */
 export async function getDuffelOffer(
@@ -252,6 +348,7 @@ export async function getDuffelOffer(
     totalCurrency: res.data.total_currency,
     expiresAt: res.data.expires_at,
     passengerIds: (res.data.passengers ?? []).map((p) => p.id),
+    itinerary: itineraryOf(res.data),
   };
 }
 
@@ -265,12 +362,34 @@ export type SyntheticPassenger = {
   phone_number: string;
 };
 
-/** Creates a Duffel TEST order paid from the test balance. Never retried. */
+type DuffelOrder = {
+  id: string;
+  booking_reference?: string;
+  live_mode?: boolean;
+  metadata?: Record<string, string> | null;
+};
+
+const orderResult = (o: DuffelOrder) => {
+  assertTestMode(o, 'order');
+  return { id: o.id, bookingReference: o.booking_reference ?? o.id, liveMode: false as const };
+};
+
+/**
+ * Creates a Duffel TEST order paid from the test balance, tagged with our idempotency key. Never retried.
+ * One distinct passenger per offer passenger id (Duffel rejects duplicate names).
+ */
 export async function createDuffelTestOrder(
   deps: Deps,
-  input: { offer: DuffelOfferSnapshot; passengers: SyntheticPassenger[] },
+  input: { offer: DuffelOfferSnapshot; passengers: SyntheticPassenger[]; key: string },
   signal: AbortSignal,
 ): Promise<{ id: string; bookingReference: string; liveMode: false }> {
+  const ids = input.offer.passengerIds;
+  if (!ids.length)
+    throw new ProviderError('REJECTED', 'The offer lists no passengers', { code: 'no_passengers' });
+  if (input.passengers.length < ids.length)
+    throw new ProviderError('REJECTED', 'Not enough travellers for this offer', {
+      code: 'passenger_count',
+    });
   const body = {
     data: {
       type: 'instant',
@@ -278,20 +397,35 @@ export async function createDuffelTestOrder(
       payments: [
         { type: 'balance', currency: input.offer.totalCurrency, amount: input.offer.totalAmount },
       ],
-      passengers: input.offer.passengerIds.map((id, i) => ({
-        id,
-        ...input.passengers[i % input.passengers.length],
-      })),
+      passengers: ids.map((id, i) => ({ id, ...input.passengers[i] })),
+      metadata: { aum_key: input.key },
     },
   };
-  const res = await call<{
-    data?: { id: string; booking_reference?: string; live_mode?: boolean };
-  }>(deps, '/air/orders', { method: 'POST', body: JSON.stringify(body) }, signal, false);
+  const res = await call<{ data?: DuffelOrder }>(
+    deps,
+    '/air/orders',
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+    false,
+  );
   if (!res.data) throw new ProviderError('MALFORMED', 'Duffel order missing');
-  assertTestMode(res.data, 'order');
-  return {
-    id: res.data.id,
-    bookingReference: res.data.booking_reference ?? 'TEST',
-    liveMode: false,
-  };
+  return orderResult(res.data);
+}
+
+/** Looks for an order we created for this offer with this idempotency key (read-only). */
+export async function findDuffelOrderByKey(
+  deps: Deps,
+  offerId: string,
+  key: string,
+  signal: AbortSignal,
+): Promise<{ id: string; bookingReference: string; liveMode: false } | null> {
+  const res = await call<{ data?: DuffelOrder[] }>(
+    deps,
+    `/air/orders?offer_id=${encodeURIComponent(offerId)}&limit=50`,
+    { method: 'GET' },
+    signal,
+    true,
+  );
+  const match = (res.data ?? []).find((o) => o.metadata?.aum_key === key);
+  return match ? orderResult(match) : null;
 }

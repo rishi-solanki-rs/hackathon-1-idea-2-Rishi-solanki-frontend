@@ -2,6 +2,8 @@
 
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import { useSyncExternalStore } from 'react';
+import { clearUserData } from './accountData';
+import { resetPlanCache } from './planStore';
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -99,6 +101,13 @@ export async function signIn(
   return error ? { ok: false, message: friendly(error.message) } : { ok: true };
 }
 
+/** Signs out and removes this person's answers from the browser, so the next person starts clean. */
 export async function signOut() {
   await supabase()?.auth.signOut();
+  try {
+    clearUserData(window.localStorage, window.sessionStorage);
+  } catch {
+    /* storage unavailable */
+  }
+  resetPlanCache();
 }

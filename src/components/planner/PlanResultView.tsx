@@ -30,6 +30,7 @@ import { buildRequest } from '@/lib/planConvert';
 import { writePlan, type PlanDraft } from '@/lib/planStore';
 import { recordPrice, tripKey } from '@/lib/priceWatch';
 import { savePlanResult } from '@/lib/sync';
+import type { Outcome } from '@/lib/accountData';
 import { useCachedPost } from '@/lib/useApi';
 import { hash } from '@/providers/fixtures/schedule';
 import { Alert, Badge, Button, ButtonLink, Card, Skeleton } from '../ui';
@@ -151,6 +152,7 @@ export function PlanResultView({ d, onEdit }: { d: PlanDraft; onEdit: (step: num
     }
   });
   const [trend, setTrend] = useState<PriceTrend | null>(null);
+  const [saved, setSaved] = useState<Outcome | null>(null);
   const result = state.kind === 'success' ? state.data.data : null;
   useEffect(() => {
     if (!result || !key) return;
@@ -159,7 +161,7 @@ export function PlanResultView({ d, onEdit }: { d: PlanDraft; onEdit: (step: num
     } catch {
       /* ignore */
     }
-    void savePlanResult(key, result);
+    void savePlanResult(key, result).then((r) => setSaved(r));
     if (result.flights.provider !== 'duffel_test') return;
     const t = recordPrice(tripKey(result.trip), result.flights.cheapest?.totalMinor ?? null);
     void Promise.resolve().then(() => setTrend(t));
@@ -255,6 +257,15 @@ export function PlanResultView({ d, onEdit }: { d: PlanDraft; onEdit: (step: num
           </Button>
         </div>
       </header>
+
+      {saved ? (
+        <p
+          role="status"
+          className={`text-sm font-medium ${saved.ok ? 'text-saving' : 'text-danger'}`}
+        >
+          {saved.ok ? 'Saved to My plans.' : saved.message}
+        </p>
+      ) : null}
 
       {diff?.changed ? (
         <Alert kind="info" title="What changed since your last plan" live>

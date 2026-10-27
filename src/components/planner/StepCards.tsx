@@ -59,16 +59,18 @@ export function StepCards({ d }: { d: PlanDraft }) {
           id,
           name: '',
           issuingCountry: 'ES',
-          program: 'iberia_club',
+          program: '',
           earn: [{ category: 'all', pointsPerEuro: unknown() }],
           bonus: null,
           postingDelayDays: unknown(),
           annualFeeEur: unknown(),
         },
       ]);
-      setOpen(id);
     }
+    // Open the new card's details straight away so its terms can be checked or filled in.
+    setOpen(id);
     setPick('');
+    window.setTimeout(() => document.getElementById(`card-${cards.length}-name`)?.focus(), 0);
   }
 
   return (
@@ -173,6 +175,7 @@ function CardRow({
   const base = c.earn.find((r) => r.category === 'all') ?? c.earn[0];
   const cat = c.catalogueId ? catalogueCard(c.catalogueId) : undefined;
   const nameErr = useErr(`${p}-name`);
+  const programErr = useErr(`${p}-program`);
   const setRule = (i: number, fn: (r: EarnRule) => EarnRule) =>
     onChange((x) => ({ ...x, earn: x.earn.map((r, j) => (j === i ? fn(r) : r)) }));
 
@@ -235,7 +238,9 @@ function CardRow({
                 value={c.program}
                 onChange={(e) => onChange((x) => ({ ...x, program: e.target.value }))}
                 className={fieldClass}
+                {...programErr}
               >
+                <option value="">Choose the points it earns</option>
                 {PROGRAMS.map((pr) => (
                   <option key={pr.id} value={pr.id}>
                     {pr.name} ({pr.unit})

@@ -16,10 +16,8 @@ import {
 } from '@/fixtures/catalogue';
 import { CARD_CATALOGUE } from '@/fixtures/cardCatalogue';
 import { haversineKm } from '@/domain/bookingWindow';
-import {
-  illustrativeAwardPoints,
-  illustrativeAwardTaxesEur,
-} from '@/providers/fixtures/fixtureFlights';
+import { illustrativeAwardTaxesEur } from '@/providers/fixtures/fixtureFlights';
+import { estimateAwardPoints } from '@/domain/awardChart';
 import type { FlightProvider } from '@/providers/types';
 import { serverEnv, type ServerEnv } from './env';
 import { searchTripFares } from './flights';
@@ -34,20 +32,38 @@ function distance(from: string, to: string): number | null {
   return a && b ? haversineKm(a, b) : null;
 }
 
-/** Rough award estimate for planning only: clearly ILLUSTRATIVE, never presented as a programme price. */
-export function estimateAward(req: PlanRequest): AwardInput {
+/**
+ * Award estimate in the programme the user chose, from a verified chart only (points at the peak price).
+ * Taxes are a rough labelled figure. Unsupported programmes or cabins return no estimate, with the reason.
+ */
+export function estimateAward(req: PlanRequest): { award: AwardInput | null; note: string | null } {
+  if (!req.estimateAward || req.award) return { award: null, note: null };
+  const program = req.estimateProgram;
+  if (!program)
+    return {
+      award: null,
+      note: 'Choose the programme you would book with to get an award estimate.',
+    };
   const legs = req.trip.tripType === 'return' ? 2 : 1;
+  const r = estimateAwardPoints({
+    program,
+    distanceKm: distance(req.trip.origin, req.trip.destination),
+    cabin: req.trip.cabin,
+    legs,
+    adults: req.trip.adults,
+  });
+  if (!r.ok) return { award: null, note: r.reason };
   return {
-    program: 'iberia_club',
-    points:
-      illustrativeAwardPoints(req.trip.origin, req.trip.destination, req.trip.cabin) *
-      legs *
-      req.trip.adults,
-    taxesEur:
-      illustrativeAwardTaxesEur(req.trip.origin, req.trip.destination, req.trip.cabin) *
-      legs *
-      req.trip.adults,
-    source: 'ILLUSTRATIVE',
+    award: {
+      program,
+      points: r.estimate.points,
+      taxesEur:
+        illustrativeAwardTaxesEur(req.trip.origin, req.trip.destination, req.trip.cabin) *
+        legs *
+        req.trip.adults,
+      source: 'ILLUSTRATIVE',
+    },
+    note: `Award estimate from Iberia's official chart (band ${r.estimate.band}, ${r.estimate.miles.toLocaleString('en-IE')} miles): ${r.estimate.offPeakPoints.toLocaleString('en-IE')} to ${r.estimate.points.toLocaleString('en-IE')} Avios (off-peak to peak; peak used). Taxes are a rough estimate.`,
   };
 }
 
@@ -70,13 +86,16 @@ export async function runPlan(req: PlanRequest, deps: PlanDeps = {}): Promise<Pl
     fetchImpl: deps.fetchImpl,
     provider: deps.provider,
   });
-  const award = req.award ?? (req.estimateAward ? estimateAward(req) : null);
+  const est = estimateAward(req);
+  const award = req.award ?? est.award;
   const result: PlanResult = computePlan(
     {
       today,
       trip: req.trip,
       profile: req.profile,
       award,
+      awardNote: est.note,
+      preferredProgram: req.award?.program ?? req.estimateProgram,
       flights,
       routes: TRANSFER_ROUTES,
       referenceEurPerPoint: REFERENCE_EUR_PER_POINT,

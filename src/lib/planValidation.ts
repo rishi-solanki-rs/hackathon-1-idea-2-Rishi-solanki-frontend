@@ -42,6 +42,7 @@ export function validateStep(d: PlanDraft, step: number): FieldErrors {
       e['card-pick'] = 'Add a card you hold, or tick “I don’t have any cards that earn points”.';
     p.cards.forEach((c, i) => {
       if (!c.name.trim()) e[`card-${i}-name`] = 'Give this card a name.';
+      if (!c.program) e[`card-${i}-program`] = 'Choose which points this card earns.';
       c.earn.forEach((r, j) => {
         const v = r.pointsPerEuro.value;
         if (v !== null && !(v >= 0 && v <= 50))
@@ -71,7 +72,10 @@ export function validateStep(d: PlanDraft, step: number): FieldErrors {
           e[`bal-${i}-max`] = 'Must be at least the lowest balance.';
       }
     });
+    if (d.award.mode === 'estimate' && !d.award.program)
+      e['aw-est-program'] = 'Choose the programme you would book with.';
     if (d.award.mode === 'entered') {
+      if (!d.award.program) e['aw-program'] = 'Choose the programme.';
       if (!(Number(d.award.points) >= 1))
         e['aw-points'] = 'Enter the points the programme asks for.';
       if (d.award.taxesEur === '' || !(Number(d.award.taxesEur) >= 0))
@@ -82,6 +86,12 @@ export function validateStep(d: PlanDraft, step: number): FieldErrors {
   }
   if (step === 3) {
     if (!p.finance.answered) e['pay-yes'] = 'Choose one answer.';
+    const budget = p.finance.tripBudgetEur;
+    const reserve = p.finance.cashReserveEur;
+    if (budget !== null && budget !== undefined && !(budget >= 0))
+      e['fin-budget'] = 'Enter a positive amount or leave empty.';
+    if (reserve !== null && reserve !== undefined && !(reserve >= 0))
+      e['fin-reserve'] = 'Enter a positive amount or leave empty.';
     p.monthly.forEach((m, i) => {
       if (!m.label.trim()) e[`m-${i}-label`] = 'Name this spending.';
       if (!(m.amountEur > 0)) e[`m-${i}-amt`] = 'Enter a monthly amount.';

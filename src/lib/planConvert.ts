@@ -21,14 +21,16 @@ export function toTripInput(d: PlanDraft['trip']): TripInput {
   };
 }
 
-export function toAward(
-  d: PlanDraft['award'],
-  holdsPoints = true,
-): {
+/**
+ * Award input from the draft. An estimate is only requested when the user explicitly asked for one and chose
+ * the programme; there is no default programme.
+ */
+export function toAward(d: PlanDraft['award']): {
   award: AwardInput | null;
   estimateAward: boolean;
+  estimateProgram?: string;
 } {
-  if (d.mode === 'entered' && num(d.points) && num(d.taxesEur) !== undefined)
+  if (d.mode === 'entered' && d.program && num(d.points) && num(d.taxesEur) !== undefined)
     return {
       award: {
         program: d.program,
@@ -39,30 +41,35 @@ export function toAward(
       },
       estimateAward: false,
     };
-  // No award price entered: if the user holds points, a labelled rough estimate keeps points comparable with cash.
-  return { award: null, estimateAward: holdsPoints };
+  if (d.mode === 'estimate' && d.program)
+    return { award: null, estimateAward: true, estimateProgram: d.program };
+  return { award: null, estimateAward: false };
 }
 
-/** Only exact/range/unknown balances the user actually entered; rows with no programme are dropped. */
+/** Only rows the user completed; card references to removed cards are dropped. */
 export function cleanProfile(p: Profile): Profile {
+  const ids = new Set(p.cards.map((c) => c.id));
+  const card = (id?: string) => (id && ids.has(id) ? id : undefined);
   return {
     ...p,
     balances: p.balances.filter((b) => b.program),
-    monthly: p.monthly.filter((m) => m.label.trim() && m.amountEur > 0),
-    purchases: p.purchases.filter((x) => x.label.trim() && x.amountEur > 0 && x.date),
+    monthly: p.monthly
+      .filter((m) => m.label.trim() && m.amountEur > 0)
+      .map((m) => ({ ...m, currentCardId: card(m.currentCardId) })),
+    purchases: p.purchases
+      .filter((x) => x.label.trim() && x.amountEur > 0 && x.date)
+      .map((x) => ({ ...x, currentCardId: card(x.currentCardId) })),
   };
 }
 
 export function buildRequest(d: PlanDraft, useExample = false) {
-  const { award, estimateAward } = toAward(
-    d.award,
-    d.profile.balances.some((b) => b.program),
-  );
+  const { award, estimateAward, estimateProgram } = toAward(d.award);
   const req = {
     trip: toTripInput(d.trip),
     profile: cleanProfile(d.profile),
     award,
     estimateAward,
+    ...(estimateProgram ? { estimateProgram } : {}),
     useExample,
   };
   return PlanRequestSchema.safeParse(req) as ReturnType<typeof PlanRequestSchema.safeParse> & {

@@ -32,7 +32,9 @@ export class ProviderError extends Error {
       | 'TEST_MODE_REQUIRED'
       | 'OFFER_EXPIRED'
       | 'PRICE_CHANGED'
-      | 'NOT_FOUND',
+      | 'NOT_FOUND'
+      /** The supplier definitely refused the request (e.g. a 422); nothing was created. */
+      | 'REJECTED',
     message: string,
     public details?: unknown,
   ) {

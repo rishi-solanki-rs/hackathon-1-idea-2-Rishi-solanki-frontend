@@ -28,6 +28,9 @@ export async function POST(req: Request) {
     return okResponse(await createTestOrder(parsed.data));
   } catch (e) {
     if (e instanceof BookingError) return errorResponse(e.code, e.message, e.details);
-    return errorResponse('INTERNAL', 'Could not create the test booking. No booking was made.');
+    return errorResponse(
+      'OUTCOME_UNKNOWN',
+      'Something went wrong while creating the test booking; it may or may not exist. Check again before booking again.',
+    );
   }
 }

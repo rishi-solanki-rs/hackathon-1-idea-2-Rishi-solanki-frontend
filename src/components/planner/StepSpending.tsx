@@ -77,6 +77,34 @@ export function StepSpending({ d }: { d: PlanDraft }) {
         ) : null}
       </fieldset>
 
+      <fieldset className="grid gap-3 sm:grid-cols-2">
+        <legend className="mb-1 text-sm font-semibold">Your cash for this trip (optional)</legend>
+        <Field
+          id="fin-budget"
+          label="Trip budget (€)"
+          hint="What you can pay in cash for the flights."
+        >
+          <NumberInput
+            id="fin-budget"
+            value={p.finance.tripBudgetEur ?? null}
+            onChange={(v) => setP((x) => ({ ...x, finance: { ...x.finance, tripBudgetEur: v } }))}
+            placeholder="Not set"
+          />
+        </Field>
+        <Field
+          id="fin-reserve"
+          label="Cash to keep in reserve (€)"
+          hint="Money that must stay untouched after paying."
+        >
+          <NumberInput
+            id="fin-reserve"
+            value={p.finance.cashReserveEur ?? null}
+            onChange={(v) => setP((x) => ({ ...x, finance: { ...x.finance, cashReserveEur: v } }))}
+            placeholder="Not set"
+          />
+        </Field>
+      </fieldset>
+
       <section aria-labelledby="monthly-h" className="grid gap-3">
         <h3 id="monthly-h" className="font-semibold">
           Every month you spend on…
@@ -137,6 +165,7 @@ export function StepSpending({ d }: { d: PlanDraft }) {
             key={x.id}
             x={x}
             i={i}
+            cards={p.cards}
             set={(patch) => setPurchase(i, patch)}
             remove={() => setP((y) => ({ ...y, purchases: y.purchases.filter((_, j) => j !== i) }))}
           />
@@ -252,11 +281,13 @@ function MonthlyRow({
 function PurchaseRow({
   x,
   i,
+  cards,
   set,
   remove,
 }: {
   x: PlannedPurchase;
   i: number;
+  cards: PlanDraft['profile']['cards'];
   set: (p: Partial<PlannedPurchase>) => void;
   remove: () => void;
 }) {
@@ -337,7 +368,31 @@ function PurchaseRow({
           />
           Optional (might not buy)
         </label>
+        <label className="flex min-h-11 items-center gap-2">
+          <input
+            type="checkbox"
+            checked={x.refundable}
+            onChange={(e) => set({ refundable: e.target.checked })}
+            className="size-5 accent-sea"
+          />
+          Refundable
+        </label>
       </div>
+      <Field id={`p-${i}-card`} label="Would pay today with">
+        <select
+          id={`p-${i}-card`}
+          value={x.currentCardId ?? ''}
+          onChange={(e) => set({ currentCardId: e.target.value || undefined })}
+          className={fieldClass}
+        >
+          <option value="">Cash / debit</option>
+          {cards.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </Field>
     </Card>
   );
 }

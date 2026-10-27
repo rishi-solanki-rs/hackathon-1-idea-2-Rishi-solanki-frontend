@@ -1,4 +1,5 @@
 import { daysBetween } from './flexDates';
+import { fmtDate } from './fmt';
 import type { FlightQuote } from './plan';
 
 export const BOOKING_GUIDANCE_LABEL =
@@ -157,8 +158,8 @@ export function bookingAdvice(input: {
     detail = `For a ${haul === 'long' ? 'long-haul' : 'short-haul'} trip, ${window.fromDays}–${window.toDays} days ahead is the usual sweet spot. Waiting rarely makes it much cheaper.${peakText}${spreadText}`;
   } else {
     timing = 'early';
-    headline = `You are early: check again from ${window.startDate}`;
-    detail = `Fares often stay similar until about ${window.toDays} days before departure. No need to rush into a non-refundable fare; recalculate around ${window.startDate} and book by ${lsbd}.${peakText}${spreadText}`;
+    headline = `You are early: check again from ${fmtDate(window.startDate)}`;
+    detail = `Fares often stay similar until about ${window.toDays} days before departure. No need to rush into a non-refundable fare; recalculate around ${fmtDate(window.startDate)} and book by ${fmtDate(lsbd)}.${peakText}${spreadText}`;
   }
   return {
     daysToDeparture,

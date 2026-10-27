@@ -1,4 +1,5 @@
 import Decimal from 'decimal.js';
+import { fmtDate } from './fmt';
 import type { AwardInput, TripInput } from './profile';
 import { daysBetween } from './flexDates';
 
@@ -28,7 +29,7 @@ const addDays = (d: string, n: number) => {
 
 export function lastSafeBookingDate(trip: Pick<TripInput, 'earliestDepart' | 'bookBy'>): string {
   const deadline =
-    trip.bookBy && trip.bookBy < trip.earliestDepart
+    trip.bookBy && trip.bookBy <= trip.earliestDepart
       ? trip.bookBy
       : addDays(trip.earliestDepart, -DEFAULT_DEADLINE_DAYS);
   return addDays(deadline, -LSBD_BUFFER_DAYS);
@@ -66,12 +67,13 @@ export function decideVerdict(v: VerdictInput): Verdict {
   const lsbd = lastSafeBookingDate(v.trip);
   const reasons: string[] = [];
   const pastDeadline = v.today > lsbd;
+  // A seat the user actually saw is evidence it is searchable, whatever the usual release window says.
   const awardAvailability: Verdict['awardAvailability'] = !v.award
     ? 'NO_AWARD'
-    : daysBetween(v.today, v.trip.earliestDepart) > AWARD_RELEASE_DAYS
-      ? 'NOT_YET_SEARCHABLE'
-      : v.award.seenAvailable
-        ? 'USER_SAW_AVAILABLE'
+    : v.award.seenAvailable
+      ? 'USER_SAW_AVAILABLE'
+      : daysBetween(v.today, v.trip.earliestDepart) > AWARD_RELEASE_DAYS
+        ? 'NOT_YET_SEARCHABLE'
         : 'UNKNOWN_AVAILABILITY';
   const awardEconomicMinor = v.award
     ? Math.round(v.award.taxesEur * 100) +
@@ -109,8 +111,8 @@ export function decideVerdict(v: VerdictInput): Verdict {
     );
     reasons.push(
       pastDeadline
-        ? `Your booking deadline (${lsbd}) has passed.`
-        : `Book by ${lsbd} to keep a safety margin before your deadline.`,
+        ? `Your booking deadline (${fmtDate(lsbd)}) has passed.`
+        : `Book by ${fmtDate(lsbd)} to keep a safety margin before your deadline.`,
     );
     return done(
       'BOOK_CASH_NOW',
@@ -134,9 +136,13 @@ export function decideVerdict(v: VerdictInput): Verdict {
       return done('CASH_BETTER', 'Keep your points for a trip where they are worth more.');
     }
     reasons.push(
-      `The award (${v.award.points.toLocaleString('en-IE')} points + ${eur(Math.round(v.award.taxesEur * 100))}) is worth about ${eur(awardEconomicMinor!)}, below the ${eur(v.cashBestMinor)} cash fare.`,
+      v.trip.objective === 'A_CASH_TODAY'
+        ? `With points you pay ${eur(Math.round(v.award.taxesEur * 100))} in taxes today instead of the ${eur(v.cashBestMinor)} cash fare (plus ${v.award.points.toLocaleString('en-IE')} points).`
+        : `The award (${v.award.points.toLocaleString('en-IE')} points + ${eur(Math.round(v.award.taxesEur * 100))}) is worth about ${eur(awardEconomicMinor!)}, below the ${eur(v.cashBestMinor)} cash fare.`,
     );
   }
+  if (pastDeadline)
+    reasons.push(`Your safe booking date (${fmtDate(lsbd)}) has passed: book as soon as possible.`);
 
   if (shortfall === 0) {
     if (awardAvailability === 'NOT_YET_SEARCHABLE') {
@@ -162,18 +168,18 @@ export function decideVerdict(v: VerdictInput): Verdict {
   reasons.push(`You need ${shortfall.toLocaleString('en-IE')} more points.`);
   if (v.pointsReady && v.pointsReady !== 'now' && v.pointsReady <= lsbd) {
     reasons.push(
-      `Your already-planned spending should cover the gap by ${v.pointsReady}, before your safe booking date ${lsbd}.`,
+      `Your already-planned spending should cover the gap by ${fmtDate(v.pointsReady)}, before your safe booking date ${fmtDate(lsbd)}.`,
     );
     return done(
       'ACCUMULATE_FROM_PLANNED_SPEND',
       v.cashBestMinor !== null
-        ? `If the points have not posted by ${lsbd}, book the cash fare.`
+        ? `If the points have not posted by ${fmtDate(lsbd)}, book the cash fare.`
         : null,
     );
   }
   reasons.push(
     v.pointsReady
-      ? `Planned spending covers the gap only on ${v.pointsReady}, after your safe booking date ${lsbd}.`
+      ? `Planned spending covers the gap only on ${fmtDate(v.pointsReady)}, after your safe booking date ${fmtDate(lsbd)}.`
       : 'Your planned spending does not cover the gap.',
   );
   return done(

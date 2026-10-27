@@ -14,6 +14,7 @@ export function SettingsView() {
   const d = usePlanDraft();
   const sync = useSync();
   const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
   if (!hydrated) return <Skeleton className="h-48" />;
 
   function exportData() {
@@ -58,9 +59,11 @@ export function SettingsView() {
         <Button
           variant="danger"
           onClick={async () => {
-            const had = sync.enabled;
-            await sync.deleteRemote();
-            await signOut();
+            const had = !!sync.userId;
+            const remote = await sync.deleteRemote();
+            if (!remote.ok) return setErr(remote.message);
+            setErr('');
+            if (had) await signOut();
             clearDemoData();
             resetPlanCache();
             setMsg(
@@ -76,6 +79,11 @@ export function SettingsView() {
       <p role="status" aria-live="polite" className="text-sm font-medium text-saving">
         {msg}
       </p>
+      {err ? (
+        <p role="alert" className="text-sm font-medium text-danger">
+          {err}
+        </p>
+      ) : null}
     </div>
   );
 }

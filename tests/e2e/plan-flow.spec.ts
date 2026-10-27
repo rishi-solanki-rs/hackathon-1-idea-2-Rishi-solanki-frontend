@@ -89,7 +89,6 @@ test.describe('Plan my trip: main journey', () => {
     await addCard(page, 'iberia_aire');
     await expect(page.getByRole('listitem').getByText('Iberia Aire (Iberia Cards)')).toBeVisible();
     await expect(page.getByText('Official source').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByLabel('Points appear after (days)').fill('30');
     await shot(page, 'plan-cards');
     await page.getByRole('button', { name: /Next: Points/ }).click();
@@ -97,7 +96,8 @@ test.describe('Plan my trip: main journey', () => {
     await page.getByRole('button', { name: 'Add a points balance' }).click();
     await page.getByLabel('Programme', { exact: true }).first().selectOption('iberia_club');
     await page.getByLabel('Avios today').fill('20000');
-    await page.getByLabel('Yes, I found one on the programme’s site').check();
+    await page.getByLabel('I found an award price on the programme’s site').check();
+    await page.locator('#aw-program').selectOption('iberia_club');
     await page.getByLabel('Points (all travellers)').fill('20500');
     await page.getByLabel('Taxes and charges (€)').fill('40');
     await page.getByRole('button', { name: /Next: Spending/ }).click();

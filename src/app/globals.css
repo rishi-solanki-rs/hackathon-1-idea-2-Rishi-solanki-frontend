@@ -94,6 +94,99 @@ body {
   opacity: 0.18;
 }
 
+/* Boarding-pass notches: two half circles cut into the perforation line. */
+.ticket-perf {
+  position: relative;
+  border-top: 2px dashed var(--color-line);
+}
+.ticket-perf::before,
+.ticket-perf::after {
+  content: '';
+  position: absolute;
+  top: -11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: var(--color-ivory);
+}
+.ticket-perf::before {
+  left: -11px;
+}
+.ticket-perf::after {
+  right: -11px;
+}
+
+@keyframes ticket-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.anim-ticket-in {
+  animation: ticket-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.anim-rise {
+  animation: rise 360ms ease-out both;
+}
+
+/* A plane gliding along a dashed route, for loading states. */
+@keyframes fly {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 1.25rem);
+    opacity: 0;
+  }
+}
+.anim-fly {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  animation: fly 2.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-sand-deep) 0%,
+    var(--color-sand) 50%,
+    var(--color-sand-deep) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

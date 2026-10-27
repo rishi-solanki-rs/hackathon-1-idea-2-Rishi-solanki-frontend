@@ -1,8 +1,9 @@
 import type { PlanResult } from './plan';
+import { fmtEur } from './fmt';
 
 export type Change = { field: string; before: string; after: string };
 
-const money = (m: number | null) => (m === null ? 'none' : `€${(m / 100).toFixed(2)}`);
+const money = (m: number | null) => (m === null ? 'none' : fmtEur(m, true));
 const n = (x: number) => x.toLocaleString('en-IE');
 
 /** What changed between two plan results, with the inputs that caused it. */
@@ -54,6 +55,18 @@ export function diffPlans(prev: PlanResult, next: PlanResult) {
     pt.bookBy !== nt.bookBy
   )
     causes.push('Travel dates or deadline changed');
+  if (pt.origin !== nt.origin || pt.destination !== nt.destination || pt.tripType !== nt.tripType)
+    causes.push('Route changed');
+  if (pt.cabin !== nt.cabin) causes.push('Cabin changed');
+  if (pt.adults !== nt.adults) causes.push('Number of travellers changed');
+  if (pt.objective !== nt.objective) causes.push('Goal changed');
+  if (prev.valuation.eurPerPoint !== next.valuation.eurPerPoint)
+    causes.push('Value per point changed');
+  if (prev.comparison.cashFareMinor !== next.comparison.cashFareMinor)
+    causes.push('Cash fare changed');
+  const spend = (r: PlanResult) =>
+    r.allocation.assignments.reduce((s, a) => s + a.unit.amountEur, 0);
+  if (spend(prev) !== spend(next)) causes.push('Spending amounts changed');
   if (JSON.stringify(prev.award) !== JSON.stringify(next.award)) causes.push('Award price changed');
   if (prev.pointsNow.usable !== next.pointsNow.usable) causes.push('Points balance changed');
   if (

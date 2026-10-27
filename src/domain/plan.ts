@@ -1,5 +1,6 @@
 import { bookingAdvice, type BookingAdvice } from './bookingWindow';
-import { allocate, type Allocation } from './cards';
+import { fmtDate, fmtEur } from './fmt';
+import { allocate, ASSUMED_POSTING_DAYS, type Allocation } from './cards';
 import {
   dailyCards,
   suggestNewCards,
@@ -8,7 +9,7 @@ import {
   type NewCardSuggestion,
 } from './newCards';
 import { earningEvents, pointsNow, readyDate, type EarnEvent, type PointsNow } from './forecast';
-import { decideVerdict, type Verdict } from './verdict';
+import { decideVerdict, lastSafeBookingDate, type Verdict } from './verdict';
 import type { AwardInput, Profile, TripInput } from './profile';
 import type { ProgramId, Provenance } from './types';
 import type { TransferRoute } from './wallet';
@@ -68,6 +69,7 @@ export type PlanResult = {
   confidenceReasons: string[];
   /** Points still missing at the safe booking date after planned spending; null without an award. */
   gapAfterPlan: number | null;
+  affordability: Affordability;
   dailyCards: DailyCard[];
   newCards: NewCardSuggestion[];
   booking: BookingAdvice;
@@ -87,6 +89,10 @@ export type PlanInputs = {
   distanceKm?: number | null;
   /** Cards the user could apply for (official terms only). */
   cardOptions?: CardOption[];
+  /** How the award estimate was made, or why there is none. */
+  awardNote?: string | null;
+  /** Programme the user chose to measure the trip in. */
+  preferredProgram?: ProgramId;
 };
 
 /** Programme the trip is measured in: the award's programme, else the airline programme the user holds most of. */
@@ -102,27 +108,136 @@ export function targetProgram(
   return held[0]?.program ?? airlinePrograms[0];
 }
 
+export type Affordability = {
+  status: 'ok' | 'short' | 'unknown';
+  /** Cash left after paying the cash fare. */
+  remainingEur: number | null;
+  reserveEur: number | null;
+  message: string;
+};
+
+const addDays = (d: string, n: number) => {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+};
+const euro = (n: number) => `€${Math.round(n).toLocaleString('en-IE')}`;
+
+/** Budget minus the fare must leave at least the reserve. Missing inputs are reported, never assumed. */
+export function checkAffordability(
+  profile: Profile,
+  cashFareMinor: number | null,
+  award: AwardInput | null,
+): Affordability {
+  const budget = profile.finance.tripBudgetEur ?? null;
+  const reserve = profile.finance.cashReserveEur ?? null;
+  if (cashFareMinor === null)
+    return {
+      status: 'unknown',
+      remainingEur: null,
+      reserveEur: reserve,
+      message: 'No cash fare yet, so affordability cannot be checked.',
+    };
+  if (budget === null || reserve === null)
+    return {
+      status: 'unknown',
+      remainingEur: budget === null ? null : budget - cashFareMinor / 100,
+      reserveEur: reserve,
+      message:
+        budget === null
+          ? 'Add your trip budget to check if the cash fare is affordable.'
+          : 'Add the cash you want to keep in reserve to check affordability.',
+    };
+  const remaining = Math.round((budget - cashFareMinor / 100) * 100) / 100;
+  const awardNote = award
+    ? ` With points you would pay about ${euro(award.taxesEur)} in taxes instead.`
+    : '';
+  return remaining >= reserve
+    ? {
+        status: 'ok',
+        remainingEur: remaining,
+        reserveEur: reserve,
+        message: `Paying cash leaves ${euro(remaining)}, above your ${euro(reserve)} reserve.`,
+      }
+    : {
+        status: 'short',
+        remainingEur: remaining,
+        reserveEur: reserve,
+        message: `Paying cash would leave ${euro(remaining)}, below your ${euro(reserve)} reserve.${awardNote}`,
+      };
+}
+
+/** "Use for everyday spending" taken from the cap-aware allocation, so both sections always agree. */
+export function dailyCardsFromAllocation(
+  profile: Profile,
+  a: Allocation,
+  target: ProgramId,
+  routes: TransferRoute[],
+): DailyCard[] {
+  const fallback = dailyCards(profile, target, routes);
+  return profile.monthly
+    .filter((m) => m.amountEur > 0)
+    .map((m) => {
+      const units = a.assignments.filter((x) => x.unit.sourceId === m.id);
+      if (!units.length) return fallback.find((d) => d.spendId === m.id)!;
+      const first = units[0]!;
+      const monthly = Math.round(units.reduce((n, x) => n + x.targetPoints, 0) / units.length);
+      const today = fallback.find((d) => d.spendId === m.id);
+      const currentMonthly = today ? today.pointsPerEuro * m.amountEur - today.gainPerMonth : 0;
+      return {
+        spendId: m.id,
+        label: m.label,
+        category: m.category,
+        amountEur: m.amountEur,
+        cardId: first.cardId,
+        cardName: first.cardName,
+        pointsPerEuro: Math.round((monthly / m.amountEur) * 1000) / 1000,
+        gainPerMonth: Math.max(0, Math.round(monthly - currentMonthly)),
+      };
+    })
+    .filter(Boolean);
+}
+
 export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): PlanResult {
   const { today, trip, profile, award, flights, routes } = input;
-  const target = targetProgram(profile, award, airlinePrograms);
+  const target =
+    award?.program ?? input.preferredProgram ?? targetProgram(profile, award, airlinePrograms);
   const userV = profile.valuations.find((v) => v.program === target);
   const valuation = userV
     ? { eurPerPoint: userV.eurPerPoint, method: 'user' as const }
     : { eurPerPoint: input.referenceEurPerPoint, method: 'reference' as const };
 
-  const now = pointsNow(profile.balances, target, routes);
-  const until =
-    trip.bookBy && trip.bookBy < trip.earliestDepart ? trip.bookBy : trip.earliestDepart;
-  const allocation = allocate(profile, target, routes, today, until);
-  const earnings = earningEvents(allocation);
-  const pointsReady = award
-    ? readyDate(
-        award.points,
-        now.usable,
-        earnings.dated,
-        now.viaTransfer > 0 ? now.transferDelayDays : 0,
-      )
-    : null;
+  // Illustrative transfer routes are never counted; unverified ones are counted but flagged.
+  const usableRoutes = routes.filter((r) => r.verification !== 'ILLUSTRATIVE');
+  const lsbd = lastSafeBookingDate(trip);
+  const now = pointsNow(profile.balances, target, usableRoutes, lsbd);
+  // Points are only useful if they are in the account by the safe booking date.
+  const allocation = allocate(profile, target, usableRoutes, today, lsbd);
+  const heldRaw: Record<ProgramId, number> = {};
+  for (const b of profile.balances)
+    if (b.program !== target && !(b.expiresOn && b.expiresOn < lsbd))
+      heldRaw[b.program] =
+        (heldRaw[b.program] ?? 0) +
+        Math.max(
+          0,
+          (b.kind === 'exact' ? (b.points ?? 0) : b.kind === 'range' ? (b.min ?? 0) : 0) -
+            (b.reserved ?? 0),
+        );
+  const earnings = earningEvents(allocation, { target, routes: usableRoutes, heldRaw });
+  // Points already held in another programme become usable after the transfer delay.
+  const events = [
+    ...(now.viaTransfer > 0
+      ? [
+          {
+            date: addDays(today, now.transferDelayDays),
+            points: now.viaTransfer,
+            label: 'Transfer of points you hold',
+          },
+        ]
+      : []),
+    ...earnings.dated,
+  ].sort((x, y) => x.date.localeCompare(y.date));
+  const pointsReady = award ? readyDate(award.points, now.direct, events) : null;
 
   const confidenceReasons: string[] = [];
   if (award?.source === 'ILLUSTRATIVE')
@@ -135,7 +250,36 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
     );
   if (now.usedRangeMinimum)
     confidenceReasons.push('An approximate balance was counted at its lowest value.');
+  for (const e of now.expired)
+    confidenceReasons.push(
+      `${e.points.toLocaleString('en-IE')} ${input.programName(e.program)} points expire on ${fmtDate(e.expiresOn)}, before your safe booking date, so they are not counted.`,
+    );
+  const held = new Set(profile.balances.map((b) => b.program));
+  for (const r of routes)
+    if (r.to === target && held.has(r.from) && r.verification === 'ILLUSTRATIVE')
+      confidenceReasons.push(
+        `Transfers from ${input.programName(r.from)} are not counted: that route is illustrative, not checked.`,
+      );
+  if (
+    now.viaTransfer > 0 &&
+    usableRoutes.some((r) => r.to === target && held.has(r.from) && r.verification === 'UNVERIFIED')
+  )
+    confidenceReasons.push(
+      'A transfer route used for your points is not confirmed on an official page.',
+    );
   if (allocation.missing.length) confidenceReasons.push('Some card terms are unknown.');
+  if (allocation.approximate)
+    confidenceReasons.push(
+      'Many purchases: the card plan is approximate (a fast method was used).',
+    );
+  if (allocation.assignments.some((x) => x.postingAssumed && x.targetPoints > 0))
+    confidenceReasons.push(
+      `When points appear is assumed (${ASSUMED_POSTING_DAYS} days after each purchase) for cards whose rule is unknown.`,
+    );
+  if (allocation.assignments.some((x) => x.refundable && x.targetPoints > 0))
+    confidenceReasons.push(
+      'Some planned purchases are refundable: their points can be clawed back if refunded.',
+    );
   if (flights.status === 'unavailable') confidenceReasons.push('No live test fare was available.');
   if (flights.status === 'example')
     confidenceReasons.push(
@@ -162,24 +306,27 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
   if (profile.cards.length === 0 && !profile.noCards) missing.push('Which cards you hold');
   if (!award)
     missing.push(
-      'An award price from the programme’s site (points + taxes), if you want to compare points',
+      input.awardNote ??
+        'An award price from the programme’s site (points + taxes), if you want to compare points',
     );
   for (const p of now.unknownPrograms) missing.push(`Your ${input.programName(p)} balance`);
 
   const assumptions = [
     `Points valued at €${valuation.eurPerPoint} each (${valuation.method === 'user' ? 'your value' : 'reference value, editable'}).`,
     trip.bookBy
-      ? `Your booking deadline: ${trip.bookBy}.`
+      ? `Your booking deadline: ${fmtDate(trip.bookBy)}.`
       : `Booking deadline assumed 21 days before your earliest departure.`,
     'A 3-day safety buffer is kept before the deadline.',
     'Monthly spending is counted on the 15th of each month until the deadline.',
     'Only necessary or committed purchases are counted; nothing extra is suggested.',
+    ...(award && input.awardNote ? [input.awardNote] : []),
   ];
 
-  const earnedByLsbd = earnings.dated
+  const earnedByLsbd = events
     .filter((e) => e.date <= verdict.lsbd)
     .reduce((s, e) => s + e.points, 0);
-  const gapAfterPlan = award ? Math.max(0, verdict.shortfall - earnedByLsbd) : null;
+  const gapAfterPlan = award ? Math.max(0, award.points - now.direct - earnedByLsbd) : null;
+  const affordability = checkAffordability(profile, cashFareMinor, award);
   const newCards = suggestNewCards({
     today,
     needBy: verdict.lsbd,
@@ -202,7 +349,8 @@ export function computePlan(input: PlanInputs, airlinePrograms: ProgramId[]): Pl
 
   const result: Omit<PlanResult, 'actions'> = {
     gapAfterPlan,
-    dailyCards: dailyCards(profile, target, routes),
+    affordability,
+    dailyCards: dailyCardsFromAllocation(profile, allocation, target, usableRoutes),
     newCards,
     booking,
     engineVersion: PLAN_ENGINE_VERSION,
@@ -238,7 +386,7 @@ export function buildActions(
   const v = r.verdict;
   const cheapest = r.flights.cheapest;
   const cashLine = cheapest
-    ? `€${(cheapest.totalMinor / 100).toFixed(2)} on ${cheapest.depart}${cheapest.ret ? ` (return ${cheapest.ret})` : ''}`
+    ? `${fmtEur(cheapest.totalMinor, true)} on ${fmtDate(cheapest.depart)}${cheapest.ret ? ` (return ${fmtDate(cheapest.ret)})` : ''}`
     : null;
   const fareNote =
     r.flights.provider === 'example'
@@ -253,7 +401,7 @@ export function buildActions(
         a.push({
           id: 'book-cash',
           kind: 'do',
-          when: `By ${v.lsbd}`,
+          when: `By ${fmtDate(v.lsbd)}`,
           title: 'Book the cash fare',
           detail: `Cheapest found: ${cashLine}. Check the real price on the airline or an agent site. ${fareNote}`,
         });
@@ -277,7 +425,7 @@ export function buildActions(
       a.push({
         id: 'book-award',
         kind: 'do',
-        when: `By ${v.lsbd}`,
+        when: `By ${fmtDate(v.lsbd)}`,
         title: `Book the award on ${prog}`,
       });
       break;
@@ -296,12 +444,12 @@ export function buildActions(
         kind: 'do',
         when: 'Now until the points post',
         title: 'Use the cards below for spending you already planned',
-        detail: `The gap should close by ${r.pointsReady}.`,
+        detail: `The gap should close by ${fmtDate(r.pointsReady!)}.`,
       });
       a.push({
         id: 'check-later',
         kind: 'verify',
-        when: `When the points post (${r.pointsReady})`,
+        when: `When the points post (${fmtDate(r.pointsReady!)})`,
         title: `Find the award seat on ${prog}, then book`,
       });
       break;
@@ -345,6 +493,14 @@ export function buildActions(
     });
   }
 
+  if (r.affordability.status === 'short')
+    a.push({
+      id: 'reserve',
+      kind: 'verify',
+      when: 'Before you book',
+      title: 'Check your budget: the cash fare cuts into your reserve',
+      detail: r.affordability.message,
+    });
   const nc = r.newCards.find((c) => c.status === 'good_fit');
   if (nc)
     a.push({

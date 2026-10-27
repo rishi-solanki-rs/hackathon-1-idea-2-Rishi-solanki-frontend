@@ -88,16 +88,21 @@ describe('validateStep', () => {
 });
 
 describe('toAward', () => {
-  it('uses a labelled estimate when no award price is entered, only if the user holds points', () => {
-    const none = {
-      mode: 'none',
-      program: 'iberia_club',
-      points: '',
-      taxesEur: '',
-      seenAvailable: false,
-    } as const;
-    expect(toAward(none, true)).toEqual({ award: null, estimateAward: true });
-    expect(toAward(none, false)).toEqual({ award: null, estimateAward: false });
+  it('correction 1: an estimate is only requested when chosen explicitly, with the chosen programme', () => {
+    const base = { points: '', taxesEur: '', seenAvailable: false };
+    expect(toAward({ ...base, mode: 'none', program: 'iberia_club' })).toEqual({
+      award: null,
+      estimateAward: false,
+    });
+    expect(toAward({ ...base, mode: 'estimate', program: '' })).toEqual({
+      award: null,
+      estimateAward: false,
+    });
+    expect(toAward({ ...base, mode: 'estimate', program: 'flying_blue' })).toEqual({
+      award: null,
+      estimateAward: true,
+      estimateProgram: 'flying_blue',
+    });
   });
   it('uses the entered award when complete', () => {
     const r = toAward({

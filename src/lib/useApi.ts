@@ -20,8 +20,16 @@ export function useCachedPost<S extends z.ZodTypeAny>(
   schema: S,
   expiresAt: (data: z.infer<S>) => number | null,
 ): [ApiState<z.infer<S>>, () => void] {
-  const [state, setState] = useState<ApiState<z.infer<S>>>({ kind: 'idle' });
+  const [stored, setStored] = useState<{ key: string | null; state: ApiState<z.infer<S>> }>({
+    key: null,
+    state: { kind: 'idle' },
+  });
   const [nonce, setNonce] = useState(0);
+  // Every state is tagged with the key it belongs to, so a previous request's result is never shown
+  // (or saved) for a new request, even for the one render before the effect runs.
+  const setState = (s: ApiState<z.infer<S>>) => setStored({ key, state: s });
+  const state: ApiState<z.infer<S>> =
+    stored.key === key ? stored.state : key ? { kind: 'loading' } : { kind: 'idle' };
 
   useEffect(() => {
     if (!key) return;

@@ -66,6 +66,8 @@ export const ErrorCodeSchema = z.enum([
   'PRICE_CHANGED',
   'PROVIDER_ERROR',
   'TEST_MODE_REQUIRED',
+  'BOOKING_REJECTED',
+  'OUTCOME_UNKNOWN',
   'INTERNAL',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;

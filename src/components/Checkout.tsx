@@ -20,16 +20,21 @@ type Phase =
   | { kind: 'price_changed'; from: Money; to: Money }
   | { kind: 'expired' }
   | { kind: 'error'; message: string }
+  | { kind: 'unknown'; message: string }
   | { kind: 'done'; order: TestOrderResponse['data'] };
 
 async function post(url: string, body: unknown) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => null);
-  return { res, json };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45_000),
+    });
+    return { res, json: await res.json().catch(() => null) };
+  } catch {
+    return { res: null, json: null };
+  }
 }
 
 function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
@@ -37,14 +42,20 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
   const [total, setTotal] = useState<Money>(o.cashToday);
   const key = useRef<string>('');
 
-  async function confirm(confirmTotal: Money) {
+  async function confirm(confirmTotal: Money, checkOnly = false) {
     if (!o.offerRef) return;
+    if (checkOnly) return placeOrder(confirmTotal, true);
     setPhase({ kind: 'working', label: 'Checking the latest price…' });
     const rp = await post('/api/booking/reprice', {
       offerRef: o.offerRef,
       quotedTotal: confirmTotal,
       expiresAt: o.expiresAt,
     });
+    if (!rp.res)
+      return setPhase({
+        kind: 'error',
+        message: 'Could not reach the server. Nothing was booked.',
+      });
     if (rp.res.status === 410) return setPhase({ kind: 'expired' });
     const parsed = RepriceResponseSchema.safeParse(rp.json);
     if (!rp.res.ok || !parsed.success)
@@ -56,14 +67,29 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
       setTotal(parsed.data.data.total);
       return setPhase({ kind: 'price_changed', from: confirmTotal, to: parsed.data.data.total });
     }
-    setPhase({ kind: 'working', label: 'Creating your test booking…' });
+    return placeOrder(confirmTotal, false);
+  }
+
+  async function placeOrder(confirmTotal: Money, checkOnly: boolean) {
+    setPhase({
+      kind: 'working',
+      label: checkOnly ? 'Checking with Duffel…' : 'Creating your test booking…',
+    });
     key.current ||= crypto.randomUUID();
     const od = await post('/api/booking/test-order', {
       offerRef: o.offerRef,
       confirmTotal,
       expiresAt: o.expiresAt,
       idempotencyKey: key.current,
+      ...(checkOnly ? { checkOnly: true } : {}),
     });
+    if (!od.res || od.res.status === 504)
+      return setPhase({
+        kind: 'unknown',
+        message:
+          od.json?.error?.message ??
+          'The connection dropped before Duffel answered. The booking may or may not exist.',
+      });
     if (od.res.status === 410) return setPhase({ kind: 'expired' });
     if (od.res.status === 409) {
       const to = od.json?.error?.details?.total as Money | undefined;
@@ -74,7 +100,8 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
     if (!od.res.ok || !op.success)
       return setPhase({
         kind: 'error',
-        message: od.json?.error?.message ?? 'No booking was made.',
+        message:
+          od.json?.error?.message ?? 'Duffel did not accept the booking. Nothing was booked.',
       });
     setPhase({ kind: 'done', order: op.data.data });
   }
@@ -140,15 +167,17 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
           </div>
         </Card>
         <Card className="p-5">
-          <h2 className="font-display text-xl">Traveller (fictional)</h2>
+          <h2 className="font-display text-xl">Travellers (fictional, for the test)</h2>
           <dl className="mt-3 grid gap-2 text-sm">
             <div className="flex justify-between gap-3">
-              <dt className="text-ink-muted">Name</dt>
-              <dd className="font-medium">Lucia Demo</dd>
+              <dt className="text-ink-muted">Names</dt>
+              <dd className="text-right font-medium">
+                Example names (Lucia Demo, Mateo Demo…), one per adult
+              </dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-ink-muted">Email</dt>
-              <dd className="font-medium">lucia.demo@example.com</dd>
+              <dd className="font-medium">example.com addresses only</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-ink-muted">Payment</dt>
@@ -198,6 +227,16 @@ function CheckoutInner({ o, backHref }: { o: OptionDto; backHref: string }) {
           {phase.message}
         </Alert>
       ) : null}
+      {phase.kind === 'unknown' ? (
+        <Alert
+          kind="warn"
+          live
+          title="We could not confirm the booking yet"
+          action={<Button onClick={() => confirm(total, true)}>Check again</Button>}
+        >
+          {phase.message} “Check again” only looks the booking up; it never books a second time.
+        </Alert>
+      ) : null}
       {phase.kind === 'review' || phase.kind === 'working' ? (
         <Button
           onClick={() => confirm(total)}
@@ -233,7 +272,7 @@ export function CheckoutView() {
             Only cash fares can be test-booked. For points, use the award steps.
           </Alert>
         ) : (
-          <CheckoutInner o={o} backHref={backHref} />
+          <CheckoutInner key={o.id} o={o} backHref={backHref} />
         )
       }
     </OptionPage>

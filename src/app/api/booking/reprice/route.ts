@@ -1,8 +1,20 @@
 import { RepriceRequestSchema } from '@/contracts/booking';
 import { BookingError, reprice } from '@/server/booking';
-import { errorResponse, okResponse, readJson, zodIssues } from '@/server/http';
+import {
+  clientKey,
+  errorResponse,
+  okResponse,
+  rateLimit,
+  readJson,
+  zodIssues,
+} from '@/server/http';
 
 export async function POST(req: Request) {
+  const rl = rateLimit(`reprice:${clientKey(req)}`);
+  if (!rl.ok)
+    return errorResponse('RATE_LIMITED', 'Too many price checks. Try again shortly.', undefined, {
+      'Retry-After': String(rl.retryAfter),
+    });
   const body = await readJson(req);
   if (!body.ok) return errorResponse('VALIDATION_ERROR', 'The request body is not valid JSON.');
   const parsed = RepriceRequestSchema.safeParse(body.value);

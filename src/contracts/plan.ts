@@ -84,12 +84,14 @@ export const ProfileSchema = z.object({
         necessity: z.enum(['necessary', 'flexible']),
         committed: z.boolean(),
         refundable: z.boolean(),
+        currentCardId: z.string().max(40).optional(),
       }),
     )
     .max(30),
   finance: z.object({
     paysInFull: z.boolean().nullable(),
     cashReserveEur: Euros.nullable().optional(),
+    tripBudgetEur: Euros.nullable().optional(),
     answered: z.boolean().optional(),
   }),
   valuations: z
@@ -153,6 +155,8 @@ export const PlanRequestSchema = z.object({
   profile: ProfileSchema,
   award: AwardSchema.nullable(),
   estimateAward: z.boolean().default(false),
+  /** Programme the user explicitly chose for an award estimate (no default). */
+  estimateProgram: z.string().max(40).optional(),
   /** The user explicitly asked to see a labelled example fare when live test fares are unavailable. */
   useExample: z.boolean().default(false),
 });
@@ -186,6 +190,7 @@ export const PlanResultSchema = z.object({
     unknownPrograms: z.array(z.string()),
     usedRangeMinimum: z.boolean(),
     reserved: z.number(),
+    expired: z.array(z.object({ program: z.string(), points: z.number(), expiresOn: z.string() })),
   }),
   allocation: z.object({
     status: z.enum(['OK', 'BLOCKED_PAYMENT', 'UNKNOWN_PAYMENT', 'NO_CARDS', 'NO_SPEND']),
@@ -200,6 +205,7 @@ export const PlanResultSchema = z.object({
           date: z.string(),
           currentCardId: z.string().optional(),
           kind: z.enum(['monthly', 'planned']),
+          refundable: z.boolean().optional(),
         }),
         cardId: z.string().nullable(),
         cardName: z.string().nullable(),
@@ -207,8 +213,10 @@ export const PlanResultSchema = z.object({
         program: z.string().nullable(),
         targetPoints: z.number(),
         postsOn: z.string().nullable(),
+        postingAssumed: z.boolean(),
         capped: z.boolean(),
         reason: z.string(),
+        refundable: z.boolean().optional(),
       }),
     ),
     excluded: z.array(z.object({ id: z.string(), label: z.string(), reason: z.string() })),
@@ -283,6 +291,12 @@ export const PlanResultSchema = z.object({
   assumptions: z.array(z.string()),
   confidenceReasons: z.array(z.string()),
   gapAfterPlan: z.number().nullable(),
+  affordability: z.object({
+    status: z.enum(['ok', 'short', 'unknown']),
+    remainingEur: z.number().nullable(),
+    reserveEur: z.number().nullable(),
+    message: z.string(),
+  }),
   dailyCards: z.array(
     z.object({
       spendId: z.string(),

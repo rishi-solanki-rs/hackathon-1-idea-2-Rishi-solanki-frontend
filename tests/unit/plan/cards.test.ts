@@ -172,7 +172,7 @@ describe('card allocation', () => {
     expect(u.missing[0]).toMatch(/pay your full card statement/);
   });
 
-  it('posting delay sets the posting date; an unknown delay leaves it undated and listed as missing', () => {
+  it('posting delay sets the posting date; an unknown delay uses the labelled assumption and is listed as missing', () => {
     const a = allocate(
       profile({
         cards: [card({ id: 'A', delay: 45 })],
@@ -216,8 +216,10 @@ describe('card allocation', () => {
       TODAY,
       UNTIL,
     );
-    expect(b.assignments[0].postsOn).toBeNull();
-    expect(b.missing).toContain('When A posts points');
+    // Correction 3: an unknown delay uses the labelled conservative assumption, still listed as missing.
+    expect(b.assignments[0].postsOn).toBe('2027-01-04');
+    expect(b.assignments[0].postingAssumed).toBe(true);
+    expect(b.missing).toContain('How many days after a purchase A points appear');
   });
 
   it('moves already-planned purchases onto a bonus card only when it pays off, and never suggests extra spending', () => {

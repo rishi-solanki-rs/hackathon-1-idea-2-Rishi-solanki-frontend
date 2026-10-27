@@ -10,23 +10,47 @@ import {
   type TestOrderRequest,
   type TestOrderResponse,
 } from '@/contracts/booking';
-import { createDuffelTestOrder, getDuffelOffer, type SyntheticPassenger } from '@/providers/duffel';
+import {
+  createDuffelTestOrder,
+  findDuffelOrderByKey,
+  getDuffelOffer,
+  type DuffelOfferSnapshot,
+  type SyntheticPassenger,
+} from '@/providers/duffel';
 import { fetchFxSnapshots } from '@/providers/fx';
 import { ProviderError } from '@/providers/types';
 import { hash } from '@/providers/fixtures/schedule';
 import { serverEnv, type ServerEnv } from './env';
 import { madridToday } from './search';
 
-/** Synthetic, fictional passenger used for every test booking. Never real personal data. */
-export const SYNTHETIC_PASSENGER: SyntheticPassenger = {
-  given_name: 'Lucia',
-  family_name: 'Demo',
-  born_on: '1990-04-12',
-  gender: 'f',
-  title: 'ms',
-  email: 'lucia.demo@example.com',
-  phone_number: '+34600000000',
-};
+const NAMES: [string, 'm' | 'f'][] = [
+  ['Lucia', 'f'],
+  ['Mateo', 'm'],
+  ['Carmen', 'f'],
+  ['Pablo', 'm'],
+  ['Elena', 'f'],
+  ['Javier', 'm'],
+  ['Sofia', 'f'],
+  ['Diego', 'm'],
+  ['Marta', 'f'],
+];
+
+/** Fictional adult travellers, one distinct name per passenger (Duffel rejects duplicate names). */
+export function syntheticPassengers(n: number): SyntheticPassenger[] {
+  return Array.from({ length: n }, (_, i) => {
+    const [given, gender] = NAMES[i % NAMES.length]!;
+    return {
+      given_name: given,
+      family_name: i < NAMES.length ? 'Demo' : `Demo${Math.floor(i / NAMES.length) + 1}`,
+      born_on: `19${80 + (i % 15)}-0${(i % 9) + 1}-1${i % 9}`,
+      gender,
+      title: gender === 'f' ? 'ms' : 'mr',
+      email: `${given.toLowerCase()}.demo${i + 1}@example.com`,
+      phone_number: `+346000000${String(10 + i).padStart(2, '0')}`,
+    };
+  });
+}
+export const SYNTHETIC_PASSENGER = syntheticPassengers(1)[0]!;
 
 export class BookingError extends Error {
   constructor(
@@ -35,7 +59,9 @@ export class BookingError extends Error {
       | 'OFFER_NOT_FOUND'
       | 'PRICE_CHANGED'
       | 'PROVIDER_ERROR'
-      | 'TEST_MODE_REQUIRED',
+      | 'TEST_MODE_REQUIRED'
+      | 'BOOKING_REJECTED'
+      | 'OUTCOME_UNKNOWN',
     message: string,
     public details?: unknown,
   ) {
@@ -56,6 +82,20 @@ function fixtureCurrentPrice(ref: string, quoted: Money): Money {
   return quoted;
 }
 
+const REJECTION: Record<string, string> = {
+  duplicate_passenger_names:
+    'The airline refused the traveller names (each traveller needs a different name).',
+  invalid_phone_number: 'The airline refused a traveller phone number.',
+  invalid_passenger_name: 'The airline refused a traveller name.',
+  invalid_passenger_title: 'The airline refused a traveller title.',
+  invalid_email_address: 'The airline refused a traveller email address.',
+  order_passengers_incompatible_with_offer: 'The travellers do not match this offer.',
+  duplicate_booking: 'The airline already has a booking for these travellers on this flight.',
+  no_passengers: 'This offer lists no travellers.',
+  passenger_count: 'The number of travellers does not match this offer.',
+};
+
+/** Errors that happen before anything was sent to the order endpoint. */
 function mapProviderError(e: unknown): never {
   if (e instanceof ProviderError) {
     if (e.code === 'OFFER_EXPIRED')
@@ -66,10 +106,23 @@ function mapProviderError(e: unknown): never {
       throw new BookingError('PRICE_CHANGED', 'The price changed. Review it before booking.');
     if (e.code === 'TEST_MODE_REQUIRED')
       throw new BookingError('TEST_MODE_REQUIRED', 'Test booking is unavailable.');
+    if (e.code === 'REJECTED') {
+      const code = (e.details as { code?: string } | undefined)?.code ?? '';
+      throw new BookingError(
+        'BOOKING_REJECTED',
+        `${REJECTION[code] ?? `Duffel refused the request (${code}).`} Nothing was booked.`,
+        { code },
+      );
+    }
+    if (e.code === 'TIMEOUT')
+      throw new BookingError(
+        'PROVIDER_ERROR',
+        'Duffel did not answer in time. Nothing was booked; try again.',
+      );
   }
   throw new BookingError(
     'PROVIDER_ERROR',
-    'The booking provider did not respond. No booking was made.',
+    'Duffel could not be reached. Nothing was booked; try again.',
   );
 }
 
@@ -83,28 +136,32 @@ function duffelDeps(env: ServerEnv, fetchImpl?: typeof fetch) {
   };
 }
 
-export async function reprice(req: RepriceRequest, deps: Deps = {}): Promise<RepriceResponse> {
+type Priced = { response: RepriceResponse; offer?: DuffelOfferSnapshot };
+
+async function priceOffer(req: RepriceRequest, deps: Deps): Promise<Priced> {
   const env = deps.env ?? serverEnv();
   const now = deps.now ?? new Date();
   if (isFixture(req.offerRef)) {
     if (req.expiresAt && Date.parse(req.expiresAt) <= now.getTime())
       throw new BookingError('OFFER_EXPIRED', 'This offer has expired. Search again.');
     const total = fixtureCurrentPrice(req.offerRef, req.quotedTotal);
-    return RepriceResponseSchema.parse({
-      ok: true,
-      status: 'ok',
-      data: {
-        offerRef: req.offerRef,
-        mode: 'SIMULATED',
-        total,
-        previousTotal: req.quotedTotal,
-        priceChanged: total.minor !== req.quotedTotal.minor,
-        expiresAt: req.expiresAt,
-      },
-    });
+    return {
+      response: RepriceResponseSchema.parse({
+        ok: true,
+        status: 'ok',
+        data: {
+          offerRef: req.offerRef,
+          mode: 'SIMULATED',
+          total,
+          previousTotal: req.quotedTotal,
+          priceChanged: total.minor !== req.quotedTotal.minor,
+          expiresAt: req.expiresAt,
+        },
+      }),
+    };
   }
   const d = duffelDeps(env, deps.fetchImpl);
-  let offer;
+  let offer: DuffelOfferSnapshot;
   try {
     offer = await getDuffelOffer(d, req.offerRef, AbortSignal.timeout(8000), now.getTime());
   } catch (e) {
@@ -122,75 +179,156 @@ export async function reprice(req: RepriceRequest, deps: Deps = {}): Promise<Rep
       'PROVIDER_ERROR',
       'Exchange rate unavailable; cannot confirm the price.',
     );
-  return RepriceResponseSchema.parse({
-    ok: true,
-    status: 'ok',
-    data: {
-      offerRef: req.offerRef,
-      mode: 'DUFFEL_TEST',
-      total: eurResult.amount,
-      previousTotal: req.quotedTotal,
-      priceChanged: eurResult.amount.minor !== req.quotedTotal.minor,
-      expiresAt: offer.expiresAt,
-    },
-  });
+  return {
+    offer,
+    response: RepriceResponseSchema.parse({
+      ok: true,
+      status: 'ok',
+      data: {
+        offerRef: req.offerRef,
+        mode: 'DUFFEL_TEST',
+        total: eurResult.amount,
+        previousTotal: req.quotedTotal,
+        priceChanged: eurResult.amount.minor !== req.quotedTotal.minor,
+        expiresAt: offer.expiresAt,
+        itinerary: offer.itinerary,
+      },
+    }),
+  };
 }
 
-/** Idempotency per instance: a repeated key returns the first result and never books twice. */
+export async function reprice(req: RepriceRequest, deps: Deps = {}): Promise<RepriceResponse> {
+  return (await priceOffer(req, deps)).response;
+}
+
+/** Per instance: finished orders and in-flight requests by idempotency key. */
 const orders = new Map<string, TestOrderResponse>();
+const inflight = new Map<string, Promise<TestOrderResponse>>();
+
+const UNKNOWN_MESSAGE =
+  'We could not confirm whether Duffel created this test booking. Do not book again: press “Check again” in a minute.';
 
 export async function createTestOrder(
   req: TestOrderRequest,
   deps: Deps = {},
 ): Promise<TestOrderResponse> {
-  const existing = orders.get(req.idempotencyKey);
-  if (existing) return existing;
+  const done = orders.get(req.idempotencyKey);
+  if (done) return done;
+  const running = inflight.get(req.idempotencyKey);
+  if (running) return running;
+  const p = runOrder(req, deps).finally(() => inflight.delete(req.idempotencyKey));
+  inflight.set(req.idempotencyKey, p);
+  return p;
+}
+
+async function runOrder(req: TestOrderRequest, deps: Deps): Promise<TestOrderResponse> {
   const env = deps.env ?? serverEnv();
   const now = deps.now ?? new Date();
+  const respond = (
+    reference: string,
+    mode: 'SIMULATED' | 'DUFFEL_TEST',
+    total: Money,
+    offer?: DuffelOfferSnapshot,
+  ) => {
+    const n = Math.max(1, offer?.passengerIds.length ?? 1);
+    const res = TestOrderResponseSchema.parse({
+      ok: true,
+      status: 'ok',
+      data: {
+        reference,
+        offerRef: req.offerRef,
+        mode,
+        total,
+        itinerary: offer?.itinerary,
+        label: TEST_BOOKING_LABEL,
+        passengers: syntheticPassengers(n).map(
+          (x) => `${x.given_name} ${x.family_name} (fictional test traveller)`,
+        ),
+        createdAt: now.toISOString(),
+      },
+    });
+    orders.set(req.idempotencyKey, res);
+    if (orders.size > 1000) orders.clear();
+    return res;
+  };
 
-  const priced = await reprice(
+  if (isFixture(req.offerRef)) {
+    const priced = await priceOffer(
+      { offerRef: req.offerRef, quotedTotal: req.confirmTotal, expiresAt: req.expiresAt },
+      deps,
+    );
+    if (priced.response.data.priceChanged)
+      throw new BookingError('PRICE_CHANGED', 'The price changed. Review it before booking.', {
+        total: priced.response.data.total,
+        previousTotal: req.confirmTotal,
+      });
+    return respond(
+      `SIM-${hash(req.idempotencyKey).toString(36).toUpperCase().slice(0, 6)}`,
+      'SIMULATED',
+      priced.response.data.total,
+    );
+  }
+
+  const d = duffelDeps(env, deps.fetchImpl);
+  // Duffel is the source of truth for this key: an earlier attempt may already have created the order.
+  const lookup = async () => {
+    try {
+      return await findDuffelOrderByKey(
+        d,
+        req.offerRef,
+        req.idempotencyKey,
+        AbortSignal.timeout(8000),
+      );
+    } catch {
+      return undefined;
+    }
+  };
+  const existing = await lookup();
+  if (existing) return respond(existing.bookingReference, 'DUFFEL_TEST', req.confirmTotal);
+  if (req.checkOnly) throw new BookingError('OUTCOME_UNKNOWN', UNKNOWN_MESSAGE);
+  if (existing === undefined)
+    throw new BookingError(
+      'PROVIDER_ERROR',
+      'Duffel could not be reached to check earlier attempts. Nothing new was booked; try again.',
+    );
+
+  const priced = await priceOffer(
     { offerRef: req.offerRef, quotedTotal: req.confirmTotal, expiresAt: req.expiresAt },
     deps,
   );
-  if (priced.data.priceChanged)
+  if (priced.response.data.priceChanged)
     throw new BookingError('PRICE_CHANGED', 'The price changed. Review it before booking.', {
-      total: priced.data.total,
+      total: priced.response.data.total,
       previousTotal: req.confirmTotal,
     });
-
-  let reference: string;
-  if (priced.data.mode === 'SIMULATED') {
-    reference = `SIM-${hash(req.idempotencyKey).toString(36).toUpperCase().slice(0, 6)}`;
-  } else {
-    const d = duffelDeps(env, deps.fetchImpl);
-    try {
-      const offer = await getDuffelOffer(d, req.offerRef, AbortSignal.timeout(8000), now.getTime());
-      const order = await createDuffelTestOrder(
-        d,
-        { offer, passengers: [SYNTHETIC_PASSENGER] },
-        AbortSignal.timeout(15000),
-      );
-      reference = order.bookingReference;
-    } catch (e) {
+  const offer = priced.offer!;
+  try {
+    // Pays exactly the amount of the offer snapshot that was just price-checked.
+    const order = await createDuffelTestOrder(
+      d,
+      {
+        offer,
+        passengers: syntheticPassengers(offer.passengerIds.length),
+        key: req.idempotencyKey,
+      },
+      AbortSignal.timeout(15000),
+    );
+    return respond(order.bookingReference, 'DUFFEL_TEST', priced.response.data.total, offer);
+  } catch (e) {
+    if (
+      e instanceof ProviderError &&
+      (e.code === 'REJECTED' || e.code === 'OFFER_EXPIRED' || e.code === 'PRICE_CHANGED')
+    )
       mapProviderError(e);
-    }
+    if (e instanceof ProviderError && e.code === 'TEST_MODE_REQUIRED')
+      throw new BookingError(
+        'TEST_MODE_REQUIRED',
+        'Duffel returned a non-test order; it was not accepted.',
+      );
+    // Timeout, lost connection or an unreadable answer: the order may exist. Reconcile, never re-post.
+    const found = await lookup();
+    if (found)
+      return respond(found.bookingReference, 'DUFFEL_TEST', priced.response.data.total, offer);
+    throw new BookingError('OUTCOME_UNKNOWN', UNKNOWN_MESSAGE);
   }
-
-  const res = TestOrderResponseSchema.parse({
-    ok: true,
-    status: 'ok',
-    data: {
-      reference,
-      mode: priced.data.mode,
-      total: priced.data.total,
-      label: TEST_BOOKING_LABEL,
-      passengers: [
-        `${SYNTHETIC_PASSENGER.given_name} ${SYNTHETIC_PASSENGER.family_name} (fictional test traveller)`,
-      ],
-      createdAt: now.toISOString(),
-    },
-  });
-  orders.set(req.idempotencyKey, res);
-  if (orders.size > 1000) orders.clear();
-  return res;
 }
